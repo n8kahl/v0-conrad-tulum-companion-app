@@ -4,7 +4,7 @@ import type { User } from "@supabase/supabase-js"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, FileText, FolderOpen, MapPin, Calendar, Settings, LogOut } from "lucide-react"
+import { LayoutDashboard, FileText, FolderOpen, MapPin, Calendar, Settings, LogOut, BarChart3 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/admin/collections", label: "Collections", icon: FolderOpen },
   { href: "/admin/venues", label: "Venues", icon: MapPin },
   { href: "/admin/visits", label: "Site Visits", icon: Calendar },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ]
 

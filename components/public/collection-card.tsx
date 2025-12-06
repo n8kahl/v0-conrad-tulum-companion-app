@@ -11,7 +11,7 @@ interface CollectionCardProps {
 export function CollectionCard({ collection }: CollectionCardProps) {
   return (
     <Link href={`/explore/collections/${collection.id}`}>
-      <Card className="group overflow-hidden transition-all hover:shadow-lg hover:border-primary/20 h-full">
+      <Card className="group overflow-hidden card-interactive gold-border-glow h-full">
         {/* Cover Image */}
         <div className="relative aspect-[16/10] bg-muted overflow-hidden">
           {collection.cover_image_url ? (

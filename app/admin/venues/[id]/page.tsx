@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
-import { AssetForm } from "@/components/admin/asset-form"
+import { VenueForm } from "@/components/admin/venue-form"
 
-export default async function EditAssetPage({
+export default async function EditVenuePage({
   params,
 }: {
   params: Promise<{ id: string }>
@@ -10,19 +10,19 @@ export default async function EditAssetPage({
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: asset, error } = await supabase
-    .from("assets")
+  const { data: venue, error } = await supabase
+    .from("venues")
     .select("*")
     .eq("id", id)
     .single()
 
-  if (error || !asset) {
+  if (error || !venue) {
     notFound()
   }
 
   return (
     <div className="max-w-4xl">
-      <AssetForm asset={asset} propertyId={asset.property_id} mode="edit" />
+      <VenueForm venue={venue} propertyId={venue.property_id} mode="edit" />
     </div>
   )
 }

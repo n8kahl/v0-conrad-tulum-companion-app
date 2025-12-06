@@ -163,3 +163,186 @@
     border-radius: 3px;
   }
 }
+
+/* Luxury Visual Polish */
+@layer base {
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Selection color */
+  ::selection {
+    background-color: oklch(0.65 0.12 75 / 0.3);
+    color: inherit;
+  }
+}
+
+@layer utilities {
+  /* Glassmorphism effect */
+  .glass {
+    background: oklch(1 0 0 / 0.8);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+  }
+
+  .dark .glass {
+    background: oklch(0.15 0.01 60 / 0.8);
+  }
+
+  /* Subtle gold shimmer animation */
+  .shimmer-gold {
+    background: linear-gradient(
+      110deg,
+      transparent 20%,
+      oklch(0.75 0.14 80 / 0.15) 50%,
+      transparent 80%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 3s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Elegant fade in animation */
+  .fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Staggered fade in for lists */
+  .stagger-fade-in > * {
+    opacity: 0;
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  .stagger-fade-in > *:nth-child(1) { animation-delay: 0.05s; }
+  .stagger-fade-in > *:nth-child(2) { animation-delay: 0.1s; }
+  .stagger-fade-in > *:nth-child(3) { animation-delay: 0.15s; }
+  .stagger-fade-in > *:nth-child(4) { animation-delay: 0.2s; }
+  .stagger-fade-in > *:nth-child(5) { animation-delay: 0.25s; }
+  .stagger-fade-in > *:nth-child(6) { animation-delay: 0.3s; }
+  .stagger-fade-in > *:nth-child(7) { animation-delay: 0.35s; }
+  .stagger-fade-in > *:nth-child(8) { animation-delay: 0.4s; }
+
+  /* Subtle hover lift effect */
+  .hover-lift {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -8px oklch(0 0 0 / 0.12);
+  }
+
+  /* Gold accent border animation */
+  .gold-border-glow {
+    position: relative;
+  }
+
+  .gold-border-glow::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      oklch(0.75 0.14 80 / 0.4),
+      oklch(0.65 0.12 75 / 0.2),
+      oklch(0.75 0.14 80 / 0.4)
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+
+  .gold-border-glow:hover::after {
+    opacity: 1;
+  }
+
+  /* Luxury text shadow for headings */
+  .text-luxury {
+    text-shadow: 0 1px 2px oklch(0 0 0 / 0.05);
+  }
+
+  /* Smooth image loading */
+  .img-smooth {
+    transition: opacity 0.3s ease;
+  }
+
+  .img-smooth[loading] {
+    opacity: 0;
+  }
+
+  /* Refined focus states */
+  .focus-ring {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Subtle gradient overlay for images */
+  .gradient-overlay {
+    position: relative;
+  }
+
+  .gradient-overlay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      oklch(0 0 0 / 0.6) 0%,
+      oklch(0 0 0 / 0.2) 40%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* Card hover state */
+  .card-interactive {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-interactive:hover {
+    border-color: oklch(0.65 0.12 75 / 0.5);
+    box-shadow:
+      0 4px 6px -1px oklch(0 0 0 / 0.05),
+      0 10px 20px -5px oklch(0 0 0 / 0.08);
+  }
+
+  /* Prose styling for descriptions */
+  .prose-luxury {
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+  }
+
+  .prose-luxury p {
+    margin-bottom: 1em;
+  }
+
+  /* Badge glow effect */
+  .badge-glow {
+    box-shadow: 0 0 8px oklch(0.65 0.12 75 / 0.3);
+  }
+}

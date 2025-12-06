@@ -8,7 +8,10 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "sonner"
 import {
   ArrowLeft,
   Building2,
@@ -22,6 +25,16 @@ import {
   Plus,
   MapPin,
   GripVertical,
+  X,
+  Clock,
+  ChevronUp,
+  ChevronDown,
+  Star,
+  MessageSquare,
+  Camera,
+  Image as ImageIcon,
+  Expand,
+  Minimize,
 } from "lucide-react"
 
 const statusColors: Record<string, string> = {
@@ -82,8 +95,129 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
     if (!error && data) {
       setStops([...stops, data])
       setSelectedVenue("")
+      toast.success("Stop added to tour")
     }
   }
+
+  const removeStop = async (stopId: string) => {
+    const supabase = createClient()
+    const { error } = await supabase.from("visit_stops").delete().eq("id", stopId)
+
+    if (!error) {
+      const newStops = stops.filter((s) => s.id !== stopId)
+      // Reindex remaining stops
+      await Promise.all(
+        newStops.map((stop, index) =>
+          supabase.from("visit_stops").update({ order_index: index }).eq("id", stop.id)
+        )
+      )
+      setStops(newStops.map((s, i) => ({ ...s, order_index: i })))
+      toast.success("Stop removed from tour")
+    }
+  }
+
+  const moveStop = async (index: number, direction: "up" | "down") => {
+    const newIndex = direction === "up" ? index - 1 : index + 1
+    if (newIndex < 0 || newIndex >= stops.length) return
+
+    const supabase = createClient()
+    const newStops = [...stops]
+    ;[newStops[index], newStops[newIndex]] = [newStops[newIndex], newStops[index]]
+
+    // Update order_index for swapped stops
+    await Promise.all([
+      supabase.from("visit_stops").update({ order_index: newIndex }).eq("id", stops[index].id),
+      supabase.from("visit_stops").update({ order_index: index }).eq("id", stops[newIndex].id),
+    ])
+
+    setStops(newStops.map((s, i) => ({ ...s, order_index: i })))
+  }
+
+  const updateStopTime = async (stopId: string, time: string) => {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("visit_stops")
+      .update({ scheduled_time: time || null })
+      .eq("id", stopId)
+
+    if (!error) {
+      setStops(stops.map((s) => (s.id === stopId ? { ...s, scheduled_time: time || null } : s)))
+      toast.success("Time updated")
+    }
+  }
+
+  const updateStopNotes = async (stopId: string, notes: string) => {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("visit_stops")
+      .update({ sales_notes: notes || null })
+      .eq("id", stopId)
+
+    if (!error) {
+      setStops(stops.map((s) => (s.id === stopId ? { ...s, sales_notes: notes || null } : s)))
+    }
+  }
+
+  const toggleFavorite = async (stopId: string, currentValue: boolean) => {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("visit_stops")
+      .update({ client_favorited: !currentValue })
+      .eq("id", stopId)
+
+    if (!error) {
+      setStops(stops.map((s) => (s.id === stopId ? { ...s, client_favorited: !currentValue } : s)))
+    }
+  }
+
+  const updateClientReaction = async (stopId: string, reaction: string) => {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("visit_stops")
+      .update({ client_reaction: reaction || null })
+      .eq("id", stopId)
+
+    if (!error) {
+      setStops(stops.map((s) => (s.id === stopId ? { ...s, client_reaction: reaction || null } : s)))
+    }
+  }
+
+  const addPhoto = async (stopId: string, photoUrl: string) => {
+    if (!photoUrl.trim()) return
+    const stop = stops.find((s) => s.id === stopId)
+    if (!stop) return
+
+    const newPhotos = [...(stop.photos || []), photoUrl.trim()]
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("visit_stops")
+      .update({ photos: newPhotos })
+      .eq("id", stopId)
+
+    if (!error) {
+      setStops(stops.map((s) => (s.id === stopId ? { ...s, photos: newPhotos } : s)))
+      toast.success("Photo added")
+    }
+  }
+
+  const removePhoto = async (stopId: string, photoIndex: number) => {
+    const stop = stops.find((s) => s.id === stopId)
+    if (!stop) return
+
+    const newPhotos = (stop.photos || []).filter((_, i) => i !== photoIndex)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from("visit_stops")
+      .update({ photos: newPhotos })
+      .eq("id", stopId)
+
+    if (!error) {
+      setStops(stops.map((s) => (s.id === stopId ? { ...s, photos: newPhotos } : s)))
+    }
+  }
+
+  const [expandedStop, setExpandedStop] = useState<string | null>(null)
+  const [newPhotoUrl, setNewPhotoUrl] = useState("")
 
   return (
     <div className="space-y-6">
@@ -215,23 +349,179 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
 
               {/* Stops List */}
               {stops.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {stops.map((stop, index) => (
                     <div
                       key={stop.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30"
+                      className="p-4 rounded-lg border border-border bg-muted/30 space-y-3"
                     >
-                      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium">
-                        {index + 1}
+                      {/* Header row */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => moveStop(index, "up")}
+                            disabled={index === 0}
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => moveStop(index, "down")}
+                            disabled={index === stops.length - 1}
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-foreground">{stop.venue?.name}</p>
+                          <p className="text-xs text-muted-foreground capitalize">
+                            {stop.venue?.venue_type.replace("_", " ")}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${stop.client_favorited ? "text-yellow-500" : "text-muted-foreground"}`}
+                          onClick={() => toggleFavorite(stop.id, stop.client_favorited || false)}
+                        >
+                          <Star className={`h-4 w-4 ${stop.client_favorited ? "fill-current" : ""}`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => removeStop(stop.id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-foreground">{stop.venue?.name}</p>
-                        <p className="text-xs text-muted-foreground capitalize">
-                          {stop.venue?.venue_type.replace("_", " ")}
-                        </p>
+
+                      {/* Details row */}
+                      <div className="flex items-start gap-4 pl-14">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            type="time"
+                            className="w-32 h-8"
+                            value={stop.scheduled_time || ""}
+                            onChange={(e) => updateStopTime(stop.id, e.target.value)}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setExpandedStop(expandedStop === stop.id ? null : stop.id)}
+                          className="gap-1"
+                        >
+                          {expandedStop === stop.id ? (
+                            <Minimize className="h-4 w-4" />
+                          ) : (
+                            <Expand className="h-4 w-4" />
+                          )}
+                          {expandedStop === stop.id ? "Less" : "More"}
+                        </Button>
                       </div>
-                      {stop.client_favorited && <Badge className="bg-accent/20 text-accent text-xs">Favorited</Badge>}
+
+                      {/* Expanded details */}
+                      {expandedStop === stop.id && (
+                        <div className="pl-14 space-y-4 pt-2 border-t border-border/50">
+                          {/* Sales Notes */}
+                          <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground">Sales Notes</label>
+                            <Textarea
+                              placeholder="Notes about this space for the proposal..."
+                              className="min-h-[80px] text-sm"
+                              value={stop.sales_notes || ""}
+                              onChange={(e) => updateStopNotes(stop.id, e.target.value)}
+                              onBlur={(e) => updateStopNotes(stop.id, e.target.value)}
+                            />
+                          </div>
+
+                          {/* Client Reaction */}
+                          <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                              <MessageSquare className="h-3 w-3" />
+                              Client Reaction / Feedback
+                            </label>
+                            <Textarea
+                              placeholder="Client's comments, reactions, questions..."
+                              className="min-h-[60px] text-sm"
+                              value={stop.client_reaction || ""}
+                              onChange={(e) => updateClientReaction(stop.id, e.target.value)}
+                              onBlur={(e) => updateClientReaction(stop.id, e.target.value)}
+                            />
+                          </div>
+
+                          {/* Photos */}
+                          <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                              <Camera className="h-3 w-3" />
+                              Photos & Media
+                            </label>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Paste photo/video URL..."
+                                value={newPhotoUrl}
+                                onChange={(e) => setNewPhotoUrl(e.target.value)}
+                                className="flex-1 h-8"
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault()
+                                    addPhoto(stop.id, newPhotoUrl)
+                                    setNewPhotoUrl("")
+                                  }
+                                }}
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  addPhoto(stop.id, newPhotoUrl)
+                                  setNewPhotoUrl("")
+                                }}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                            {stop.photos && stop.photos.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {stop.photos.map((photo, photoIndex) => (
+                                  <div
+                                    key={photoIndex}
+                                    className="relative group rounded overflow-hidden border"
+                                  >
+                                    <img
+                                      src={photo}
+                                      alt={`Stop photo ${photoIndex + 1}`}
+                                      className="w-20 h-20 object-cover"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removePhoto(stop.id, photoIndex)}
+                                      className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              Tip: Upload photos to a service like Imgur or Google Photos and paste the URL here
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

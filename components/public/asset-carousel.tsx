@@ -1,6 +1,5 @@
 "use client"
 
-import type { Asset } from "@/lib/supabase/types"
 import Image from "next/image"
 import Link from "next/link"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,8 +15,18 @@ const assetTypeIcons: Record<string, typeof FileText> = {
   diagram: Layout,
 }
 
+// Minimal asset type required for carousel display
+interface CarouselAsset {
+  id: string
+  name: string
+  asset_type: string
+  category: string
+  thumbnail_url: string | null
+  description?: string | null
+}
+
 interface AssetCarouselProps {
-  assets: Asset[]
+  assets: CarouselAsset[]
 }
 
 export function AssetCarousel({ assets }: AssetCarouselProps) {
