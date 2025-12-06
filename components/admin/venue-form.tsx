@@ -68,6 +68,7 @@ interface Venue {
   features: string[]
   images: string[]
   floorplan_url: string | null
+  map_coordinates: { x?: number; y?: number }
   description: string | null
   is_active: boolean
 }
@@ -100,6 +101,10 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
   const [images, setImages] = useState<string[]>(venue?.images || [])
   const [newImageUrl, setNewImageUrl] = useState("")
   const [floorplanUrl, setFloorplanUrl] = useState(venue?.floorplan_url || "")
+  const [mapCoordinates, setMapCoordinates] = useState({
+    x: venue?.map_coordinates?.x || 50,
+    y: venue?.map_coordinates?.y || 50,
+  })
   const [isActive, setIsActive] = useState(venue?.is_active ?? true)
 
   const handleCapacityChange = (key: string, value: string) => {
@@ -150,6 +155,7 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
         features,
         images,
         floorplan_url: floorplanUrl || null,
+        map_coordinates: mapCoordinates,
         is_active: isActive,
         updated_at: new Date().toISOString(),
       }
@@ -353,6 +359,47 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
                 onChange={(e) => setFloorplanUrl(e.target.value)}
                 placeholder="https://..."
               />
+            </div>
+
+            <div className="pt-4 border-t border-border">
+              <Label className="mb-3 block">Map Position (%)</Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Position on resort map (0-100). Center is 50,50.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="map-x">X (horizontal)</Label>
+                  <Input
+                    id="map-x"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={mapCoordinates.x}
+                    onChange={(e) =>
+                      setMapCoordinates((prev) => ({
+                        ...prev,
+                        x: Math.min(100, Math.max(0, parseFloat(e.target.value) || 50)),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="map-y">Y (vertical)</Label>
+                  <Input
+                    id="map-y"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={mapCoordinates.y}
+                    onChange={(e) =>
+                      setMapCoordinates((prev) => ({
+                        ...prev,
+                        y: Math.min(100, Math.max(0, parseFloat(e.target.value) || 50)),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

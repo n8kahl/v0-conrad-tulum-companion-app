@@ -7,7 +7,11 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Users, MapPin, Heart, ChevronRight, Building2 } from "lucide-react"
+import { Calendar, Users, MapPin, Heart, ChevronRight, Building2, FileText, Map, Navigation, Play } from "lucide-react"
+import Link from "next/link"
+import { ResortMap } from "@/components/map/resort-map"
+import { JourneyTimeline } from "@/components/journey/journey-timeline"
+import { TourMode } from "./tour-mode"
 
 interface ClientVisitViewProps {
   visit: SiteVisit
@@ -18,6 +22,11 @@ interface ClientVisitViewProps {
 export function ClientVisitView({ visit, stops: initialStops, property }: ClientVisitViewProps) {
   const [stops, setStops] = useState(initialStops)
   const [activeStop, setActiveStop] = useState<string | null>(null)
+  const [isTourMode, setIsTourMode] = useState(false)
+
+  const handleStopUpdate = (stopId: string, updates: Partial<VisitStop>) => {
+    setStops(stops.map((s) => (s.id === stopId ? { ...s, ...updates } : s)))
+  }
 
   const toggleFavorite = async (stopId: string) => {
     const supabase = createClient()
@@ -36,8 +45,39 @@ export function ClientVisitView({ visit, stops: initialStops, property }: Client
 
   const favoriteCount = stops.filter((s) => s.client_favorited).length
 
+  // Render Tour Mode if active
+  if (isTourMode) {
+    return (
+      <TourMode
+        stops={stops}
+        onStopUpdate={handleStopUpdate}
+        onClose={() => setIsTourMode(false)}
+      />
+    )
+  }
+
   return (
     <main className="px-6 py-8 max-w-2xl mx-auto">
+      {/* Start Tour Button */}
+      {stops.length > 0 && (
+        <Card className="mb-6 bg-primary/5 border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-foreground">Ready to explore?</p>
+                <p className="text-sm text-muted-foreground">
+                  Start interactive tour mode for the best experience
+                </p>
+              </div>
+              <Button onClick={() => setIsTourMode(true)}>
+                <Play className="h-4 w-4 mr-1.5" />
+                Start Tour
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Visit Summary */}
       <Card className="mb-8">
         <CardContent className="p-6">
@@ -60,15 +100,32 @@ export function ClientVisitView({ visit, stops: initialStops, property }: Client
             )}
           </div>
           {favoriteCount > 0 && (
-            <div className="mt-4 pt-4 border-t border-border">
+            <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
                 <Heart className="inline h-4 w-4 text-primary mr-1" fill="currentColor" />
                 You&apos;ve favorited {favoriteCount} venue{favoriteCount !== 1 ? "s" : ""}
               </p>
+              <Link href={`/recap/${visit.share_token}`}>
+                <Button variant="outline" size="sm">
+                  <FileText className="h-4 w-4 mr-1.5" />
+                  View Recap
+                </Button>
+              </Link>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Resort Map */}
+      {stops.length > 0 && (
+        <section className="mb-8">
+          <ResortMap
+            venues={stops.map((s) => s.venue)}
+            stops={stops}
+            showTourRoute={true}
+          />
+        </section>
+      )}
 
       {/* Tour Itinerary */}
       <section>
@@ -190,6 +247,42 @@ export function ClientVisitView({ visit, stops: initialStops, property }: Client
             </CardContent>
           </Card>
         )}
+      </section>
+
+      {/* Journey Timeline */}
+      <section className="mt-8">
+        <JourneyTimeline
+          property={property}
+          firstVenue={stops[0]?.venue || null}
+        />
+      </section>
+
+      {/* Quick Links */}
+      <section className="mt-8 grid gap-4 sm:grid-cols-2">
+        <Link
+          href={`/journey/${visit.share_token}`}
+          className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors"
+        >
+          <div className="p-2 rounded-full bg-primary/10">
+            <Navigation className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="font-medium text-foreground text-sm">Full Journey View</p>
+            <p className="text-xs text-muted-foreground">Gate-to-gate arrival experience</p>
+          </div>
+        </Link>
+        <Link
+          href={`/recap/${visit.share_token}`}
+          className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors"
+        >
+          <div className="p-2 rounded-full bg-primary/10">
+            <FileText className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="font-medium text-foreground text-sm">Visit Recap</p>
+            <p className="text-xs text-muted-foreground">Summary and favorited venues</p>
+          </div>
+        </Link>
       </section>
 
       {/* Footer */}

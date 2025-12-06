@@ -97,7 +97,7 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
   const [description, setDescription] = useState(asset?.description || "")
   const [urls, setUrls] = useState<Record<string, string>>(asset?.urls || {})
   const [thumbnailUrl, setThumbnailUrl] = useState(asset?.thumbnail_url || "")
-  const [tags, setTags] = useState<string[]>(asset?.tags || [])
+  const [tags, setTags] = useState<string[]>([...new Set(asset?.tags || [])])
   const [newTag, setNewTag] = useState("")
   const [sortOrder, setSortOrder] = useState(asset?.sort_order || 0)
   const [isActive, setIsActive] = useState(asset?.is_active ?? true)
@@ -418,9 +418,9 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <span className="text-xs text-muted-foreground mr-2">Selected:</span>
-                {tags.map((tag) => (
+                {tags.map((tag, index) => (
                   <Badge
-                    key={tag}
+                    key={`${tag}-${index}`}
                     variant="secondary"
                     className="capitalize gap-1"
                   >

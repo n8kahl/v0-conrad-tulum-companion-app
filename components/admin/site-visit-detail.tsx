@@ -35,6 +35,7 @@ import {
   Image as ImageIcon,
   Expand,
   Minimize,
+  CalendarDays,
 } from "lucide-react"
 
 const statusColors: Record<string, string> = {
@@ -552,12 +553,20 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
                   {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
-              <Button asChild variant="outline" className="w-full bg-transparent">
-                <a href={shareUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Preview Client View
-                </a>
-              </Button>
+              <div className="flex gap-2">
+                <Button asChild variant="outline" className="flex-1 bg-transparent">
+                  <a href={shareUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Client View
+                  </a>
+                </Button>
+                <Button asChild variant="outline" className="flex-1 bg-transparent">
+                  <Link href={`/admin/visits/${visit.id}/agenda`}>
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    Agenda
+                  </Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
