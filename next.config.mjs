@@ -15,6 +15,8 @@ const nextConfig = {
       },
     ],
   },
+  // Disable font optimization to prevent build failures when Google Fonts can't be fetched
+  optimizeFonts: false,
   turbopack: {
     // Force Turbopack to treat this project folder as the workspace root
     root: __dirname,
