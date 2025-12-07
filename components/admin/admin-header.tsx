@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu, LayoutDashboard, FileText, FolderOpen, MapPin, Calendar, Settings, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -27,6 +28,7 @@ export function AdminHeader({ user }: AdminHeaderProps) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
+  const branding = getBrandingConfig()
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -48,7 +50,7 @@ export function AdminHeader({ user }: AdminHeaderProps) {
           <div className="flex h-16 items-center border-b border-sidebar-border px-6">
             <Link href="/admin" className="flex flex-col" onClick={() => setOpen(false)}>
               <span className="text-sidebar-foreground/70 text-[10px] font-medium tracking-[0.2em] uppercase">
-                Conrad
+                {branding.property.shortName.split(' ')[0]}
               </span>
               <span className="text-sidebar-foreground text-sm font-light">Site Companion</span>
             </Link>

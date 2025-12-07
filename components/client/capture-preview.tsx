@@ -210,8 +210,17 @@ export function CaptureFullPreview({
     }
   }
 
+  const isReaction =
+    !!currentCapture.caption &&
+    /[\u{1F300}-\u{1F9FF}]/u.test(currentCapture.caption) &&
+    currentCapture.caption.trim().length <= 4
+
   const textLabel =
-    currentCapture.capture_type === "reaction" ? "Reaction" : "Note"
+    currentCapture.capture_type === "voice_note"
+      ? "Voice Note"
+      : isReaction
+      ? "Reaction"
+      : "Note"
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>

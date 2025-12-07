@@ -5,7 +5,10 @@ import { Playfair_Display } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { LanguageProvider } from "@/lib/contexts/language-context"
+import { getBrandingConfig } from "@/lib/branding/config"
 import "./globals.css"
+
+const branding = getBrandingConfig()
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -23,8 +26,8 @@ const playfair = Playfair_Display({
 })
 
 export const metadata: Metadata = {
-  title: "Conrad Site Visit Companion | Conrad Tulum Riviera Maya",
-  description: "Your personalized guide to planning unforgettable group experiences at Conrad Tulum Riviera Maya.",
+  title: `Site Visit Companion | ${branding.property.name}`,
+  description: branding.property.description,
   generator: "v0.app",
   icons: {
     icon: [
@@ -37,16 +40,16 @@ export const metadata: Metadata = {
         media: "(prefers-color-scheme: dark)",
       },
       {
-        url: "/icon.svg",
+        url: branding.images.favicon,
         type: "image/svg+xml",
       },
     ],
-    apple: "/apple-icon.png",
+    apple: branding.images.appleTouchIcon,
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: "#C4A052",
+  themeColor: branding.colors.themeColor,
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

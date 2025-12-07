@@ -7,6 +7,7 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Building2, Users, ArrowRight, Sparkles } from "lucide-react"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -23,14 +24,15 @@ const staggerContainer = {
 
 export function WelcomeScreen() {
   const [shareToken, setShareToken] = useState("")
+  const branding = getBrandingConfig()
 
   return (
     <div className="relative min-h-svh w-full overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="https://media.cntraveler.com/photos/6245d3ef538c15fb628ae3cb/16:9/w_2240,c_limit/Conrad%20Tulum_%C2%A9Victor%20Elias_Lobby%20(3).jpg"
-          alt="Conrad Tulum Riviera Maya"
+          src={branding.images.welcomeBackground}
+          alt={branding.property.name}
           fill
           className="object-cover"
           priority
@@ -49,10 +51,10 @@ export function WelcomeScreen() {
         >
           <div className="flex flex-col items-center gap-1">
             <span className="text-white/70 text-xs font-medium tracking-[0.4em] uppercase">
-              Conrad
+              {branding.property.shortName.split(' ')[0]}
             </span>
             <h1 className="text-white text-xl font-light tracking-widest">
-              TULUM RIVIERA MAYA
+              {branding.property.shortName.split(' ').slice(1).join(' ').toUpperCase()}
             </h1>
           </div>
         </motion.header>
@@ -82,9 +84,9 @@ export function WelcomeScreen() {
               transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
               className="font-serif text-white text-4xl lg:text-5xl font-light leading-tight mb-6"
             >
-              Crafted
-              <br />
-              Experiences
+              {branding.property.tagline.split(' ').map((word, i, arr) => (
+                <span key={i}>{word}{i < arr.length - 1 && <br />}</span>
+              ))}
             </motion.h2>
 
             <motion.p
@@ -92,8 +94,7 @@ export function WelcomeScreen() {
               transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
               className="text-white/70 text-base leading-relaxed max-w-sm"
             >
-              Your personalized guide to planning unforgettable group experiences
-              at one of the Caribbean&apos;s most extraordinary destinations.
+              {branding.property.description}
             </motion.p>
 
             {/* Explore Link - Desktop */}

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Map, ZoomIn, ZoomOut, Maximize2, X, Heart, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 interface ResortMapProps {
   venues: Venue[]
@@ -28,6 +29,7 @@ export function ResortMap({
   const [activeVenue, setActiveVenue] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [zoom, setZoom] = useState(1)
+  const branding = getBrandingConfig()
   const mapRef = useRef<HTMLDivElement>(null)
 
   // Get venue data for stops
@@ -91,8 +93,8 @@ export function ResortMap({
         style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
       >
         <Image
-          src="/images/assets/resort-map.png"
-          alt="Conrad Tulum Resort Map"
+          src={branding.images.resortMap || branding.images.placeholder}
+          alt={`${branding.property.shortName} Resort Map`}
           fill
           className="object-contain"
           priority

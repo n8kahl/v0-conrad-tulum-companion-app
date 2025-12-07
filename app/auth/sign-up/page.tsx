@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, Loader2 } from "lucide-react"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 export default function SignUpPage() {
   const [fullName, setFullName] = useState("")
@@ -20,6 +21,7 @@ export default function SignUpPage() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const branding = getBrandingConfig()
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,8 +67,8 @@ export default function SignUpPage() {
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/luxury-resort-ocean-view-sunset-conrad-tulum-aeria.jpg"
-          alt="Conrad Tulum Riviera Maya"
+          src={branding.images.signUpBackground}
+          alt={branding.property.name}
           fill
           className="object-cover"
           priority
@@ -93,7 +95,7 @@ export default function SignUpPage() {
             {/* Header */}
             <div className="text-center mb-8">
               <div className="text-primary-foreground/80 text-xs font-medium tracking-[0.3em] uppercase mb-2">
-                Conrad Tulum
+                {branding.property.shortName}
               </div>
               <h1 className="font-serif text-primary-foreground text-2xl font-light">Request Access</h1>
             </div>

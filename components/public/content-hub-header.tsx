@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Menu, Globe, Search, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 const navLinks = [
   { href: "/explore", labelKey: "collections" as const },
@@ -17,6 +18,7 @@ const navLinks = [
 export function ContentHubHeader() {
   const { locale, setLocale, t } = useLanguage()
   const pathname = usePathname()
+  const branding = getBrandingConfig()
 
   const toggleLanguage = () => {
     setLocale(locale === "en" ? "es" : "en")
@@ -41,10 +43,10 @@ export function ContentHubHeader() {
           </div>
           <div className="flex flex-col">
             <span className="text-muted-foreground text-[9px] font-medium tracking-[0.2em] uppercase">
-              Conrad
+              {branding.property.shortName.split(' ')[0]}
             </span>
             <span className="text-foreground text-sm font-medium -mt-0.5">
-              Tulum Riviera Maya
+              {branding.property.shortName.split(' ').slice(1).join(' ')}
             </span>
           </div>
         </Link>

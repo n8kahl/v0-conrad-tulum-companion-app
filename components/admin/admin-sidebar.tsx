@@ -17,6 +17,7 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 const navGroups = [
   {
@@ -51,6 +52,7 @@ interface AdminSidebarProps {
 export function AdminSidebar({ user }: AdminSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const branding = getBrandingConfig()
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -72,12 +74,12 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         <Link href="/admin" className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary/10">
             <span className="text-sidebar-primary font-serif text-lg font-semibold">
-              C
+              {branding.property.shortName.split(' ')[0][0]}
             </span>
           </div>
           <div className="flex flex-col">
             <span className="text-sidebar-foreground/60 text-[9px] font-medium tracking-[0.2em] uppercase">
-              Conrad
+              {branding.property.shortName.split(' ')[0]}
             </span>
             <span className="text-sidebar-foreground text-sm font-medium -mt-0.5">
               Site Companion

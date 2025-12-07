@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, Loader2 } from "lucide-react"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -17,6 +18,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const branding = getBrandingConfig()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,10 +50,12 @@ export default function LoginPage() {
           loop
           muted
           playsInline
-          poster="https://media.cntraveler.com/photos/6245d3ef538c15fb628ae3cb/16:9/w_2240,c_limit/Conrad%20Tulum_%C2%A9Victor%20Elias_Lobby%20(3).jpg"
+          poster={branding.images.loginBackground}
           aria-hidden="true"
         >
-          <source src="/api/media/home-video" type="video/mp4" />
+          {branding.images.loginBackgroundVideo && (
+            <source src={branding.images.loginBackgroundVideo} type="video/mp4" />
+          )}
         </video>
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/60" />
       </div>
@@ -75,7 +79,7 @@ export default function LoginPage() {
             {/* Header */}
             <div className="text-center mb-8">
               <div className="text-primary-foreground/80 text-xs font-medium tracking-[0.3em] uppercase mb-2">
-                Conrad Tulum
+                {branding.property.shortName}
               </div>
               <h1 className="font-serif text-primary-foreground text-2xl font-light">Sales Team Login</h1>
             </div>

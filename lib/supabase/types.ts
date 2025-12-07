@@ -156,7 +156,7 @@ export interface Profile {
 
 export type MediaFileType = "image" | "video" | "audio" | "document" | "pdf"
 export type MediaSource = "upload" | "capture" | "ai_generated"
-export type CaptureType = "photo" | "voice_note" | "video"
+export type CaptureType = "photo" | "voice_note" | "video" | "reaction" | "note"
 export type Sentiment = "positive" | "neutral" | "negative"
 export type AnnotationType = "reaction" | "question" | "concern" | "highlight" | "note"
 export type MediaContext = "hero" | "gallery" | "floorplan" | "menu" | "capacity_chart" | "av_diagram" | "setup_theater" | "setup_banquet" | "setup_classroom" | "setup_reception" | "360_tour" | "video_walkthrough" | "previous_event"
@@ -286,7 +286,7 @@ export type VenueMediaContext =
   | "video_walkthrough"
   | "previous_event"
 
-export type CaptureTypeExtended = "photo" | "voice_note" | "video_clip" | "annotation"
+export type CaptureTypeExtended = "photo" | "voice_note" | "video_clip" | "annotation" | "reaction" | "note"
 export type SentimentExtended = "positive" | "neutral" | "negative" | "excited" | "concerned"
 
 // Media Library - Central repository for all files

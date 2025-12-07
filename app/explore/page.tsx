@@ -3,9 +3,11 @@ import { ContentHubHeader } from "@/components/public/content-hub-header"
 import { CollectionCard } from "@/components/public/collection-card"
 import { AssetCarousel } from "@/components/public/asset-carousel"
 import { PopularAssets } from "@/components/public/popular-assets"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 export default async function ExplorePage() {
   const supabase = await createClient()
+  const branding = getBrandingConfig()
 
   const [collectionsResult, featuredResult, popularResult] = await Promise.all([
     supabase.from("collections").select("*").eq("is_active", true).order("sort_order", { ascending: true }),
@@ -39,13 +41,13 @@ export default async function ExplorePage() {
         <div className="relative px-6 py-12 max-w-6xl mx-auto fade-in">
           <div className="text-center max-w-2xl mx-auto">
             <p className="text-primary text-xs font-medium tracking-[0.3em] uppercase mb-3 shimmer-gold inline-block px-2">
-              Conrad Tulum Riviera Maya
+              {branding.property.name}
             </p>
             <h1 className="font-serif text-3xl md:text-4xl font-light text-foreground leading-tight text-balance text-luxury">
               Explore Our Sales & Event Resources
             </h1>
             <p className="mt-4 text-muted-foreground leading-relaxed prose-luxury">
-              Discover comprehensive materials to help plan your perfect group experience at Conrad Tulum.
+              Discover comprehensive materials to help plan your perfect group experience at {branding.property.shortName}.
             </p>
           </div>
         </div>

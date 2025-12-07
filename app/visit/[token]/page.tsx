@@ -4,6 +4,7 @@ import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { ClientVisitView } from "@/components/client/client-visit-view"
 import { ArrowLeft } from "lucide-react"
+import { getBrandingConfig } from "@/lib/branding/config"
 
 export default async function ClientVisitPage({
   params,
@@ -12,6 +13,7 @@ export default async function ClientVisitPage({
 }) {
   const { token } = await params
   const supabase = await createClient()
+  const branding = getBrandingConfig()
 
   // Find visit by share token
   const { data: visit, error } = await supabase.from("site_visits").select("*").eq("share_token", token).single()
@@ -54,8 +56,8 @@ export default async function ClientVisitPage({
       <header className="relative">
         <div className="relative h-48 md:h-64 bg-secondary">
           <Image
-            src="/luxury-resort-ocean-view-sunset-conrad-tulum-aeria.jpg"
-            alt="Conrad Tulum Riviera Maya"
+            src={branding.images.visitHeroDefault}
+            alt={branding.property.name}
             fill
             className="object-cover opacity-80"
             priority
@@ -70,8 +72,8 @@ export default async function ClientVisitPage({
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div className="text-right">
-              <p className="text-primary-foreground/70 text-[10px] tracking-[0.2em] uppercase">Conrad</p>
-              <p className="text-primary-foreground text-sm font-light">Tulum Riviera Maya</p>
+              <p className="text-primary-foreground/70 text-[10px] tracking-[0.2em] uppercase">{branding.property.shortName.split(' ')[0]}</p>
+              <p className="text-primary-foreground text-sm font-light">{branding.property.shortName.split(' ').slice(1).join(' ')}</p>
             </div>
           </div>
 

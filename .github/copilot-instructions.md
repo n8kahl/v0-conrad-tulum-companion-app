@@ -6,12 +6,15 @@
 
 **Core user flow**: Sales directors create site visits → guide clients through venue tours → capture photos/voice notes → generate AI-powered recaps with sentiment analysis → share interactive journey links with clients.
 
+**Tech stack**: Next.js 16 (App Router) • React 19 • TypeScript (strict) • Supabase (Auth + Database + Storage) • shadcn/ui (Radix + Tailwind v4) • Anthropic Claude • OpenAI Whisper • Framer Motion
+
 **Key architectural decision**: This is a dual-interface app with distinctly different access patterns:
 
 - `/admin/*` - CMS for sales directors (authenticated, full CRUD)
 - `/explore/*` - Public content hub (marketing assets, venues, collections)
 - `/visit/[token]` - Tokenized client tour experience (no auth required)
 - `/recap/[token]` - AI-generated post-tour recap pages
+- `/journey/[token]` - Interactive journey visualization post-tour
 
 ## Database Architecture
 
@@ -97,6 +100,26 @@ export function AssetGrid({ assets }: { assets: Asset[] }) {
 - Brand colors: Primary gold `#C4A052`, Secondary dark `#2D2D2D`
 - Mobile-first: Always design for touch (min 44px tap targets)
 
+### Branding Configuration
+
+**All branding elements can be managed through the admin settings page** (`/admin/settings`). Branding is stored in the database (`properties.branding_config`) and centralized in code at `lib/branding/config.ts`.
+
+```typescript
+import { getBrandingConfig } from "@/lib/branding/config";
+
+const branding = getBrandingConfig();
+// Access: branding.property.name, branding.colors.primary, branding.images.welcomeBackground
+```
+
+**Admin UI**: Navigate to Settings → Branding Configuration to edit:
+- Property info (name, tagline, description)
+- Colors (primary, secondary, theme) with live preview
+- Images (welcome, auth, headers, maps)
+- Contact info (email, phone, address)
+- Social media (website, Instagram, Facebook)
+
+**API**: Use `/api/branding` GET/POST endpoints for programmatic access. See `docs/BRANDING_MANAGEMENT.md` for details. Database migration: `scripts/009_branding_configuration.sql`
+
 ### TypeScript Props Pattern
 
 Always define interfaces for component props:
@@ -173,19 +196,30 @@ When building offline features, queue actions locally and sync when online.
 ### Running the App
 
 ```bash
-pnpm dev       # Start dev server (localhost:3000)
+pnpm dev       # Start dev server (localhost:3000) with Turbopack
 pnpm build     # Production build with type checking
 pnpm lint      # ESLint validation
+pnpm start     # Production server
 ```
 
-**Before committing**: Always run `pnpm build` to catch TypeScript errors. This project uses strict mode.
+**Before committing**: Always run `pnpm build` to catch TypeScript errors. This project uses strict mode (`strict: true` in `tsconfig.json`).
 
 ### Database Changes
 
 1. Write SQL in `scripts/*.sql` following naming pattern `00X_description.sql`
-2. Test locally in Supabase Studio SQL Editor
-3. Document in `docs/PHASE1_IMPLEMENTATION.md` if part of major feature
-4. Update TypeScript types manually (no auto-generation yet)
+2. Test locally in Supabase Studio SQL Editor (SQL Editor tab)
+3. Document in `docs/PHASE*_*.md` if part of major feature
+4. Update TypeScript types in `lib/supabase/types.ts` manually (no auto-generation)
+5. **Never modify `supabase/functions/` TypeScript config** - excluded from main project
+
+### Supabase Edge Functions (Phase 2)
+
+Located in `supabase/functions/` with separate TypeScript config:
+
+- `process-image/` - Image metadata extraction, blurhash generation
+- `process-pdf/` - PDF text extraction, document classification
+- Deploy via `supabase/functions/deploy.sh` (requires Supabase CLI)
+- Triggered asynchronously from `/api/media/upload` route
 
 ### Environment Variables Required
 
@@ -200,12 +234,14 @@ ANTHROPIC_API_KEY=sk-xxx  # For AI recap generation
 
 1. **Dynamic Routes**: Always `await params` in Next.js 16: `const { id } = await params`
 2. **Image Optimization Disabled**: `next.config.mjs` has `unoptimized: true` for v0.app deployment
-3. **Path Aliases**: Use `@/*` for all imports (maps to project root)
-4. **Middleware**: Runs on all routes except static assets. Handles Supabase session refresh.
+3. **Path Aliases**: Use `@/*` for all imports (maps to project root via `tsconfig.json`)
+4. **Middleware**: Runs on all routes except static assets (see `config.matcher`). Handles Supabase session refresh via `updateSession()` from `@/lib/supabase/proxy`.
 5. **Array Columns**: Supabase arrays use PostgreSQL syntax: `asset_ids UUID[]`. In queries, use `.contains()` or `.overlaps()`.
 6. **JSONB Columns**: Use `->` for access in queries: `.select("capacities->theater")`
 7. **Media Library**: Use junction tables (`venue_media`, `asset_media`) to link media, not direct foreign keys. Media files are stored in Supabase Storage bucket `media-library`.
-8. **File Uploads**: Always use `/api/media/upload` route, not direct storage access. Processing happens asynchronously.
+8. **File Uploads**: Always use `/api/media/upload` route, not direct storage access. Processing happens asynchronously via Edge Functions.
+9. **Turbopack**: Enabled by default in dev mode (Next.js 16). `turbopack.root` set to `__dirname` in config.
+10. **React 19**: Uses new JSX runtime (`jsx: "react-jsx"` in tsconfig). No need to import React in components.
 
 ## Testing Checklist for New Features
 
@@ -220,20 +256,24 @@ ANTHROPIC_API_KEY=sk-xxx  # For AI recap generation
 
 ## Files to Reference
 
-- Architecture decisions: `docs/PHASE1_IMPLEMENTATION.md`
-- Database schema: `scripts/001_create_tables.sql`
-- Media library system: `scripts/007_media_library_system.sql`
-- Phase 1 schema: `supabase/migrations/20241206_phase1_media_schema.sql`
-- Auth patterns: `lib/supabase/{client,server,proxy}.ts`
+- Architecture decisions: `docs/PHASE1_IMPLEMENTATION.md`, `docs/PHASE2_COMPLETE.md`
+- Branding system: `lib/branding/config.ts`, `docs/BRANDING_CONFIGURATION.md` (centralized property branding)
+- Database schema: `scripts/001_create_tables.sql` (base tables)
+- Media library system: `scripts/007_media_library_system.sql` (migration with automated data migration)
+- Auth patterns: `lib/supabase/{client,server,proxy}.ts` (critical two-client pattern)
 - TypeScript types: `lib/supabase/types.ts` (includes media system types)
-- Media API routes: `app/api/media/*`
-- UI components: `components/ui/*` (shadcn/ui)
-- Custom hooks: `lib/hooks/*`
+- Media processing: `lib/media/{processing,image-processing,pdf-processing}.ts`
+- Media API routes: `app/api/media/*` (upload, webhook, retry endpoints)
+- AI recap generation: `app/api/recaps/generate/route.ts`
+- UI components: `components/ui/*` (shadcn/ui with Radix primitives)
+- Custom hooks: `lib/hooks/*` (camera, audio, geolocation, offline)
+- Tour mode (complex): `components/client/tour-mode.tsx` (1200+ lines, stateful tour experience)
 
 ## When in Doubt
 
-- Prioritize **mobile experience** over desktop
+- Prioritize **mobile experience** over desktop (iOS Safari is primary target)
 - Follow **Next.js App Router** patterns (no Pages Router)
-- Keep Server Components default, explicit `"use client"`
+- Keep Server Components default, explicit `"use client"` only when needed
 - Use **Supabase RLS** for security (not application-level checks)
 - Match **existing component patterns** before inventing new ones
+- Check `docs/` for feature implementation details before building

@@ -15,6 +15,7 @@ import { CameraCapture } from "./camera-capture"
 import { VoiceRecorder, type VoiceRecordingResult } from "./voice-recorder"
 import { CapturePreview, CaptureFullPreview } from "./capture-preview"
 import { VenueMediaViewer } from "./venue-media-viewer"
+import { VenueMediaManager } from "./venue-media-manager"
 import { VenueResourcesDrawer } from "./venue-resources-drawer"
 import { useGeolocation } from "@/lib/hooks/use-geolocation"
 import {
@@ -101,6 +102,9 @@ export function TourMode({
   const [isUploading, setIsUploading] = useState(false)
   const [showMediaViewer, setShowMediaViewer] = useState(false)
   const [showResourcesDrawer, setShowResourcesDrawer] = useState(false)
+  const [showMediaManager, setShowMediaManager] = useState(false)
+  const [mediaRefreshKey, setMediaRefreshKey] = useState(0)
+  const [liveVenueMedia, setLiveVenueMedia] = useState<VenueMedia[]>([])
 
   const supabase = createClient()
   const { getPosition } = useGeolocation()
@@ -110,6 +114,7 @@ export function TourMode({
   const VenueIcon = currentStop
     ? venueTypeIcons[currentStop.venue.venue_type] || MapPin
     : MapPin
+  const propertyId = currentStop?.venue.property_id || visit?.property_id || ""
 
   // Calculate capture statistics for current stop
   const stopCaptures = useMemo(() => {
@@ -136,11 +141,11 @@ export function TourMode({
 
   // Get venue media resources grouped by context
   const venueMediaResources = useMemo(() => {
+    if (liveVenueMedia.length > 0) return liveVenueMedia
     if (!currentStop?.venue) return []
-    
     const venue = currentStop.venue as any
     return venue.venue_media || []
-  }, [currentStop])
+  }, [currentStop, liveVenueMedia])
 
   // Check for speech synthesis support on mount
   useEffect(() => {
@@ -281,6 +286,26 @@ export function TourMode({
 
     loadCaptures()
   }, [currentStop])
+
+  // Load venue media for manager/viewer
+  useEffect(() => {
+    if (!currentStop) return
+
+    const loadVenueMedia = async () => {
+      const { data, error } = await supabase
+        .from("venue_media")
+        .select("*, media:media_library(*)")
+        .eq("venue_id", currentStop.venue.id)
+        .order("context")
+        .order("display_order")
+
+      if (!error && data) {
+        setLiveVenueMedia(data as VenueMedia[])
+      }
+    }
+
+    loadVenueMedia()
+  }, [currentStop, mediaRefreshKey])
 
   // Handle capture toolbar actions
   const handleCaptureStart = useCallback((type: CaptureResult["type"]) => {
@@ -541,7 +566,7 @@ export function TourMode({
         id: captureData.id,
         visit_stop_id: currentStop.id,
         media_id: captureData.mediaId || "",
-        capture_type: "reaction",
+        capture_type: "photo", // Reactions are saved as annotations, not captures
         caption: emoji,
         transcript: null,
         sentiment: null,
@@ -649,7 +674,6 @@ export function TourMode({
 
     if (!error) {
       onStopUpdate(currentStop.id, { client_reaction: clientNotes })
-      setShowNotes(false)
       toast.success("Notes saved")
     }
   }
@@ -790,6 +814,17 @@ export function TourMode({
                 <FileText className="h-4 w-4" />
                 <span className="hidden sm:inline">Resources</span>
               </Button>
+              {propertyId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowMediaManager(true)}
+                  className="gap-1.5 shrink-0"
+                >
+                  <Camera className="h-4 w-4" />
+                  <span className="hidden sm:inline">Add media</span>
+                </Button>
+              )}
               {onShowMapForVenue && (
                 <Button
                   variant="outline"
@@ -1191,6 +1226,8 @@ export function TourMode({
         venueName={currentStop.venue.name}
         isOpen={showMediaViewer}
         onClose={() => setShowMediaViewer(false)}
+        onManage={() => setShowMediaManager(true)}
+        refreshKey={mediaRefreshKey}
       />
 
       {/* Venue Resources Drawer */}
@@ -1200,6 +1237,18 @@ export function TourMode({
         isOpen={showResourcesDrawer}
         onClose={() => setShowResourcesDrawer(false)}
       />
+
+      {/* Venue Media Manager */}
+      {propertyId && (
+        <VenueMediaManager
+          venueId={currentStop.venue.id}
+          propertyId={propertyId}
+          venueName={currentStop.venue.name}
+          isOpen={showMediaManager}
+          onClose={() => setShowMediaManager(false)}
+          onUpdated={() => setMediaRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   )
 }

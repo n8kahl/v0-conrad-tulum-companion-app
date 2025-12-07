@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import { BrandingSettings } from "@/components/admin/branding-settings"
+import type { BrandingConfig } from "@/lib/branding/config"
 
 interface Property {
   id: string
@@ -30,6 +32,7 @@ export default function SettingsPage() {
   const [isSavingProperty, setIsSavingProperty] = useState(false)
   const [isSavingColors, setIsSavingColors] = useState(false)
   const [property, setProperty] = useState<Property | null>(null)
+  const [brandingConfig, setBrandingConfig] = useState<BrandingConfig | null>(null)
 
   // Form state
   const [propertyName, setPropertyName] = useState("")
@@ -56,6 +59,21 @@ export default function SettingsPage() {
     }
     loadProperty()
   }, [supabase])
+
+  useEffect(() => {
+    async function loadBranding() {
+      try {
+        const response = await fetch("/api/branding")
+        if (response.ok) {
+          const data = await response.json()
+          setBrandingConfig(data)
+        }
+      } catch (error) {
+        console.error("Failed to load branding config:", error)
+      }
+    }
+    loadBranding()
+  }, [])
 
   const savePropertyInfo = async () => {
     if (!property) return
@@ -113,6 +131,27 @@ export default function SettingsPage() {
       })
     }
     setIsSavingColors(false)
+  }
+
+  const handleSaveBranding = async (config: BrandingConfig) => {
+    try {
+      const response = await fetch("/api/branding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branding_config: config,
+          brand_colors: config.colors
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save branding")
+      }
+
+      setBrandingConfig(config)
+    } catch (error) {
+      throw error
+    }
   }
 
   if (isLoading) {
@@ -257,6 +296,14 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Branding Configuration */}
+      {brandingConfig && (
+        <BrandingSettings
+          initialConfig={brandingConfig}
+          onSave={handleSaveBranding}
+        />
+      )}
     </div>
   )
 }
