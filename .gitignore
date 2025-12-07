@@ -30,3 +30,11 @@ ts-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Supabase CLI temporary files
+supabase/.temp/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
