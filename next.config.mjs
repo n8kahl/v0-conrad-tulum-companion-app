@@ -30,8 +30,6 @@ const nextConfig = {
       { protocol: "https", hostname: "conrad-tulum-riviera-maya.firstview.us" },
     ],
   },
-  // Disable font optimization to prevent build failures when Google Fonts can't be fetched
-  optimizeFonts: false,
   turbopack: {
     // Force Turbopack to treat this project folder as the workspace root
     root: __dirname,
