@@ -96,7 +96,7 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [mediaLinks, setMediaLinks] = useState<VenueMediaLink[]>([])
   const [parentVenues, setParentVenues] = useState<Array<{id: string, name: string, venue_type: string}>>([])
-  const [childVenues, setChildVenues] = useState<Array<{id: string, name: string, location: any}>>([])
+  const [childVenues, setChildVenues] = useState<Array<{id: string, name: string, map_coordinates: any}>>([])
 
   // Fetch media links and related venues if editing
   useEffect(() => {
@@ -127,7 +127,7 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
         // Fetch child venues (for map pin editor)
         const { data: children } = await supabase
           .from("venues")
-          .select("id, name, location")
+          .select("id, name, map_coordinates")
           .eq("parent_venue_id", venue.id)
           .order("name")
         
@@ -628,7 +628,7 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
                     <div key={child.id} className="flex items-center justify-between p-2 bg-muted rounded">
                       <span className="text-sm">{child.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        Pin: {child.location?.mapX?.toFixed(1) || "50"}%, {child.location?.mapY?.toFixed(1) || "50"}%
+                        Pin: {child.map_coordinates?.mapX?.toFixed(1) || "50"}%, {child.map_coordinates?.mapY?.toFixed(1) || "50"}%
                       </span>
                     </div>
                   ))}
