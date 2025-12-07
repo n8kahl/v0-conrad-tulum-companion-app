@@ -39,7 +39,6 @@ import {
   Volume2,
   VolumeX,
   Camera,
-  Mic,
   FileText,
   type LucideIcon,
 } from "lucide-react"
@@ -90,7 +89,6 @@ export function TourMode({
   const [isPlaying, setIsPlaying] = useState(false)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [clientNotes, setClientNotes] = useState("")
-  const [showNotes, setShowNotes] = useState(false)
   const [reactions, setReactions] = useState<string[]>([])
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
@@ -103,8 +101,6 @@ export function TourMode({
   const [isUploading, setIsUploading] = useState(false)
   const [showMediaViewer, setShowMediaViewer] = useState(false)
   const [showResourcesDrawer, setShowResourcesDrawer] = useState(false)
-  const [quickNoteText, setQuickNoteText] = useState("")
-  const [isSavingNote, setIsSavingNote] = useState(false)
 
   const supabase = createClient()
   const { getPosition } = useGeolocation()
@@ -120,13 +116,23 @@ export function TourMode({
     if (!currentStop) return { photos: 0, notes: 0, reactions: 0, isFavorited: false }
     
     const stopCaps = captures.filter(c => c.visit_stop_id === currentStop.id)
+    const isEmojiReaction = (caption: string) =>
+      /[\u{1F300}-\u{1F9FF}]/u.test(caption) && caption.trim().length <= 4
+
+    const noteCount = stopCaps.filter(
+      c => c.capture_type === "voice_note" || (c.caption && !isEmojiReaction(c.caption))
+    ).length
+    const reactionCount = stopCaps.filter(
+      c => c.caption && isEmojiReaction(c.caption)
+    ).length
+    const textNotes = clientNotes.trim() ? 1 : 0
     return {
       photos: stopCaps.filter(c => c.capture_type === "photo").length,
-      notes: stopCaps.filter(c => c.capture_type === "voice_note" || c.caption).length,
-      reactions: stopCaps.filter(c => c.caption && /[\u{1F300}-\u{1F9FF}]/u.test(c.caption)).length,
+      notes: noteCount + textNotes,
+      reactions: reactionCount,
       isFavorited: currentStop.client_favorited || false,
     }
-  }, [currentStop, captures])
+  }, [currentStop, captures, clientNotes])
 
   // Get venue media resources grouped by context
   const venueMediaResources = useMemo(() => {
@@ -535,7 +541,7 @@ export function TourMode({
         id: captureData.id,
         visit_stop_id: currentStop.id,
         media_id: captureData.mediaId || "",
-        capture_type: "photo", // API might not support "reaction" type yet
+        capture_type: "reaction",
         caption: emoji,
         transcript: null,
         sentiment: null,
@@ -555,57 +561,6 @@ export function TourMode({
       setReactions(prev => [...prev, emoji])
     }
   }, [currentStop, visit])
-
-  // Handle quick note save
-  const handleSaveQuickNote = useCallback(async () => {
-    if (!currentStop || !quickNoteText.trim()) {
-      toast.error("Please enter a note")
-      return
-    }
-
-    setIsSavingNote(true)
-    try {
-      const response = await fetch("/api/captures", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          visitStopId: currentStop.id,
-          captureType: "note",
-          caption: quickNoteText.trim(),
-          capturedBy: "sales",
-          propertyId: visit?.property_id,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to save note")
-      }
-
-      const captureData = await response.json()
-      const newCapture: VisitCapture = {
-        id: captureData.id,
-        visit_stop_id: currentStop.id,
-        media_id: captureData.mediaId || "",
-        capture_type: "photo", // API might not support "note" type yet
-        caption: quickNoteText.trim(),
-        transcript: null,
-        sentiment: null,
-        captured_at: new Date().toISOString(),
-        captured_by: "sales",
-        location: null,
-        created_at: new Date().toISOString(),
-      }
-
-      setCaptures(prev => [...prev, newCapture])
-      setQuickNoteText("")
-      toast.success("Note saved!")
-    } catch (error) {
-      console.error("Save note error:", error)
-      toast.error("Failed to save note")
-    } finally {
-      setIsSavingNote(false)
-    }
-  }, [currentStop, visit, quickNoteText])
 
   // Handle quick note
   const handleQuickNote = useCallback(async (content: string) => {
@@ -968,89 +923,58 @@ export function TourMode({
               </div>
             )}
 
-            {/* Capture Summary Panel */}
-            {(stopCaptures.photos > 0 || stopCaptures.notes > 0 || stopCaptures.isFavorited) && (
-              <Card className="mb-4 bg-muted/50 border-primary/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4 text-sm flex-wrap">
-                    {stopCaptures.photos > 0 && (
-                      <span className="flex items-center gap-1.5">
-                        <Camera className="h-4 w-4 text-primary" />
-                        <span className="font-medium">{stopCaptures.photos}</span>
-                        <span className="text-muted-foreground">
-                          {stopCaptures.photos === 1 ? "photo" : "photos"}
-                        </span>
-                      </span>
-                    )}
-                    {stopCaptures.notes > 0 && (
-                      <span className="flex items-center gap-1.5">
-                        <MessageSquare className="h-4 w-4 text-primary" />
-                        <span className="font-medium">{stopCaptures.notes}</span>
-                        <span className="text-muted-foreground">
-                          {stopCaptures.notes === 1 ? "note" : "notes"}
-                        </span>
-                      </span>
-                    )}
-                    {stopCaptures.isFavorited && (
-                      <span className="flex items-center gap-1.5 text-primary">
-                        <Heart className="h-4 w-4 fill-current" />
-                        <span className="font-medium">Favorited</span>
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Quick Actions: Add Photo & Add Note */}
-            <div className="flex gap-2 mb-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowCamera(true)}
-                className="flex-1"
-              >
-                <Camera className="h-4 w-4 mr-2" />
-                Add Photo
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowVoiceRecorder(true)}
-                className="flex-1"
-              >
-                <Mic className="h-4 w-4 mr-2" />
-                Voice Note
-              </Button>
-            </div>
-
-            {/* Quick Note Input */}
+            {/* Captures Hub */}
             <Card className="mb-4">
               <CardContent className="p-4">
-                <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Quick Note
-                </h3>
-                <Textarea
-                  placeholder="Add a quick note about this space..."
-                  value={quickNoteText}
-                  onChange={(e) => setQuickNoteText(e.target.value)}
-                  className="mb-2"
-                  rows={2}
-                  maxLength={300}
-                />
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground">
-                    {quickNoteText.length}/300
-                  </span>
-                  <Button
-                    size="sm"
-                    onClick={handleSaveQuickNote}
-                    disabled={!quickNoteText.trim() || isSavingNote}
-                  >
-                    {isSavingNote ? "Saving..." : "Save Note"}
-                  </Button>
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                      <Camera className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Captures</p>
+                      <p className="text-xs text-muted-foreground">
+                        Photos, voice notes, and quick reactions for this stop.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Camera className="h-3 w-3" />
+                      {stopCaptures.photos}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MessageSquare className="h-3 w-3" />
+                      {stopCaptures.notes}
+                    </span>
+                    {stopCaptures.isFavorited && (
+                      <span className="flex items-center gap-1 text-primary">
+                        <Heart className="h-3 w-3 fill-current" />
+                        Favorite
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={captures.length === 0}
+                      onClick={() => captures[0] && setPreviewCapture(captures[0])}
+                    >
+                      View all
+                    </Button>
+                  </div>
                 </div>
+                {captures.length > 0 ? (
+                  <CapturePreview
+                    captures={captures}
+                    onRemove={handleRemoveCapture}
+                    onPreview={(capture) => setPreviewCapture(capture)}
+                    className="bg-muted/50 rounded-xl p-2"
+                  />
+                ) : (
+                  <div className="border border-dashed rounded-lg px-4 py-6 text-center text-sm text-muted-foreground">
+                    No captures yet — use the toolbar below to add a photo, voice note, reaction, or quick note.
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1132,90 +1056,39 @@ export function TourMode({
             {/* Notes Section */}
             <Card className="border-primary/20">
               <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-start justify-between gap-3 mb-3">
                   <h3 className="font-medium flex items-center gap-2">
                     <MessageSquare className="h-4 w-4 text-primary" />
-                    Your Notes
+                    Notes for this stop
                   </h3>
-                  {showNotes ? (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowNotes(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button size="sm" onClick={handleSaveNotes}>
-                        <Check className="h-4 w-4 mr-1" />
-                        Save
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowNotes(true)}
-                    >
-                      {clientNotes ? "Edit" : "Add Notes"}
-                    </Button>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Keep quick thoughts and follow-ups together.
+                  </p>
                 </div>
-
-                <AnimatePresence mode="wait">
-                  {showNotes ? (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                    >
-                      <Textarea
-                        value={clientNotes}
-                        onChange={(e) => setClientNotes(e.target.value)}
-                        placeholder="What do you think about this venue? Any questions or ideas for your event?"
-                        rows={4}
-                        className="resize-none"
-                      />
-                    </motion.div>
-                  ) : clientNotes ? (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="p-3 bg-muted/50 rounded-lg"
-                    >
-                      <p className="text-sm text-foreground/80 italic">
-                        &quot;{clientNotes}&quot;
-                      </p>
-                    </motion.div>
-                  ) : (
-                    <motion.p
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-sm text-muted-foreground"
-                    >
-                      Tap &quot;Add Notes&quot; to record your thoughts about
-                      this venue.
-                    </motion.p>
-                  )}
-                </AnimatePresence>
+                <Textarea
+                  value={clientNotes}
+                  onChange={(e) => setClientNotes(e.target.value)}
+                  placeholder="What stands out? What would you change? Any questions to follow up on?"
+                  rows={4}
+                  className="resize-none"
+                  maxLength={800}
+                />
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Use the toolbar note button for quick bullets; refine them here.</span>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNotes}
+                    disabled={!clientNotes.trim() && !currentStop.client_reaction}
+                  >
+                    <Check className="h-4 w-4 mr-1" />
+                    Save notes
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
         </AnimatePresence>
       </main>
-
-      {/* Capture Preview Strip */}
-      {captures.length > 0 && (
-        <div className="fixed top-[165px] left-0 right-0 z-30 px-4">
-          <CapturePreview
-            captures={captures}
-            onRemove={handleRemoveCapture}
-            onPreview={(capture) => setPreviewCapture(capture)}
-            compact
-            className="bg-white/90 backdrop-blur-sm rounded-xl p-2 shadow-lg"
-          />
-        </div>
-      )}
 
       {/* Bottom Navigation & Capture Toolbar */}
       <footer className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-md border-t border-border pb-safe">

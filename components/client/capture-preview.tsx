@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Trash2,
+  MessageSquare,
 } from "lucide-react"
 import {
   Dialog,
@@ -82,6 +83,18 @@ function CaptureItem({
 }: CaptureItemProps) {
   const size = compact ? "w-14 h-14" : "w-20 h-20"
   const iconSize = compact ? "w-4 h-4" : "w-5 h-5"
+  const isPhoto = capture.capture_type === "photo" && !!capture.media?.storage_path
+  const isVoice = capture.capture_type === "voice_note"
+  const hasText = !isPhoto && !!capture.caption
+  const isReaction =
+    hasText && capture.caption && capture.caption.trim().length <= 4
+  const badgeLabel = isPhoto
+    ? "Photo"
+    : isVoice
+    ? "Voice"
+    : isReaction
+    ? "Reaction"
+    : "Note"
 
   return (
     <motion.div
@@ -95,28 +108,22 @@ function CaptureItem({
       )}
       onClick={onPreview}
     >
-      {capture.capture_type === "photo" ? (
+      {isPhoto ? (
         /* Photo Thumbnail */
         <>
-          {capture.media?.storage_path ? (
-            <img
-              src={capture.media.storage_path}
-              alt={capture.caption || "Captured photo"}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-              <Camera className={cn(iconSize, "text-gray-400")} />
-            </div>
-          )}
-          <div className="absolute bottom-1 left-1 bg-black/50 rounded p-0.5">
+          <img
+            src={capture.media?.storage_path || ""}
+            alt={capture.caption || "Captured photo"}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute bottom-1 left-1 bg-black/60 rounded px-1.5 py-0.5">
             <Camera className="w-3 h-3 text-white" />
           </div>
         </>
-      ) : (
+      ) : isVoice ? (
         /* Voice Note Thumbnail */
-        <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
-          <Mic className={cn(iconSize, "text-white")} />
+        <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center text-white">
+          <Mic className={cn(iconSize)} />
           {capture.media?.duration && (
             <span className="absolute bottom-1 left-1 text-[10px] text-white bg-black/50 px-1 rounded">
               {Math.floor(capture.media.duration / 60)}:
@@ -124,15 +131,30 @@ function CaptureItem({
             </span>
           )}
         </div>
+      ) : (
+        /* Text / Reaction Thumbnail */
+        <div className="w-full h-full bg-muted flex items-center justify-center px-2 text-center">
+          <div className="flex flex-col items-center gap-1">
+            <MessageSquare className={cn(iconSize, "text-muted-foreground")} />
+            <p className="text-[10px] leading-snug line-clamp-3">
+              {capture.caption}
+            </p>
+          </div>
+        </div>
       )}
 
-      {/* Remove Button (on hover) */}
+      {/* Type Badge */}
+      <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
+        {badgeLabel}
+      </div>
+
+      {/* Remove Button */}
       <button
         onClick={(e) => {
           e.stopPropagation()
           onRemove()
         }}
-        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 flex items-center justify-center"
       >
         <X className="w-3 h-3 text-white" />
       </button>
@@ -188,6 +210,9 @@ export function CaptureFullPreview({
     }
   }
 
+  const textLabel =
+    currentCapture.capture_type === "reaction" ? "Reaction" : "Note"
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl h-[80vh] p-0 bg-black border-0">
@@ -218,14 +243,15 @@ export function CaptureFullPreview({
               exit={{ opacity: 0 }}
               className="w-full h-full flex items-center justify-center"
             >
-              {currentCapture.capture_type === "photo" ? (
+              {currentCapture.capture_type === "photo" &&
+              currentCapture.media?.storage_path ? (
                 /* Photo View */
                 <img
                   src={currentCapture.media?.storage_path || ""}
                   alt={currentCapture.caption || "Captured photo"}
                   className="max-w-full max-h-full object-contain"
                 />
-              ) : (
+              ) : currentCapture.capture_type === "voice_note" ? (
                 /* Voice Note View */
                 <div className="text-center">
                   <div className="w-32 h-32 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center mx-auto mb-6">
@@ -253,6 +279,17 @@ export function CaptureFullPreview({
                       {String(currentCapture.media.duration % 60).padStart(2, "0")}
                     </p>
                   )}
+                </div>
+              ) : (
+                /* Text / Reaction View */
+                <div className="text-center px-6">
+                  <div className="inline-flex items-center gap-2 bg-white/10 text-white px-3 py-1 rounded-full mb-4">
+                    <MessageSquare className="w-4 h-4" />
+                    <span className="text-sm">{textLabel}</span>
+                  </div>
+                  <p className="text-white/90 text-lg leading-relaxed">
+                    {currentCapture.caption || currentCapture.transcript || "No details"}
+                  </p>
                 </div>
               )}
             </motion.div>
