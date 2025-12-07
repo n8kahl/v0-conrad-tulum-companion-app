@@ -14,6 +14,7 @@ import { CaptureToolbar, type CaptureResult } from "./capture-toolbar"
 import { CameraCapture } from "./camera-capture"
 import { VoiceRecorder, type VoiceRecordingResult } from "./voice-recorder"
 import { CapturePreview, CaptureFullPreview } from "./capture-preview"
+import { VenueMediaViewer } from "./venue-media-viewer"
 import { useGeolocation } from "@/lib/hooks/use-geolocation"
 import {
   Play,
@@ -38,6 +39,7 @@ import {
   VolumeX,
   Camera,
   Mic,
+  FileText,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -98,6 +100,7 @@ export function TourMode({
   const [captures, setCaptures] = useState<VisitCapture[]>([])
   const [previewCapture, setPreviewCapture] = useState<VisitCapture | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [showMediaViewer, setShowMediaViewer] = useState(false)
 
   const supabase = createClient()
   const { getPosition } = useGeolocation()
@@ -708,6 +711,15 @@ export function TourMode({
                   )}
                 </Button>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMediaViewer(true)}
+                className="gap-1.5 shrink-0"
+              >
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">Resources</span>
+              </Button>
               {onShowMapForVenue && (
                 <Button
                   variant="outline"
@@ -749,18 +761,29 @@ export function TourMode({
           >
             {/* Venue Image */}
             <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-muted mb-4">
-              {currentStop.venue.images?.[0] ? (
-                <Image
-                  src={currentStop.venue.images[0]}
-                  alt={currentStop.venue.name}
-                  fill
-                  className="object-cover"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <VenueIcon className="h-16 w-16 text-muted-foreground/30" />
-                </div>
-              )}
+              {(() => {
+                // Try to find hero image from new media system
+                const heroMedia = (currentStop.venue as any).venue_media?.find(
+                  (vm: any) => vm.context === "hero"
+                )?.media
+                
+                const imageUrl = heroMedia?.storage_path
+                  ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${heroMedia.storage_path}`
+                  : currentStop.venue.images?.[0]
+
+                return imageUrl ? (
+                  <Image
+                    src={imageUrl}
+                    alt={currentStop.venue.name}
+                    fill
+                    className="object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <VenueIcon className="h-16 w-16 text-muted-foreground/30" />
+                  </div>
+                )
+              })()}
 
               {/* Favorite button overlay */}
               <motion.button
@@ -1072,6 +1095,14 @@ export function TourMode({
           onRemove={handleRemoveCapture}
         />
       )}
+
+      {/* Venue Media Viewer */}
+      <VenueMediaViewer
+        venueId={currentStop.venue.id}
+        venueName={currentStop.venue.name}
+        isOpen={showMediaViewer}
+        onClose={() => setShowMediaViewer(false)}
+      />
     </div>
   )
 }

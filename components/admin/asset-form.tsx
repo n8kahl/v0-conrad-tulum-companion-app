@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, X, Plus, Save, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { AssetMediaManager } from "./asset-media-manager"
+import type { AssetMediaLink } from "@/lib/supabase/types"
 
 const assetTypes = [
   { value: "pdf", label: "PDF" },
@@ -88,6 +90,24 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
   const router = useRouter()
   const supabase = createClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [mediaLinks, setMediaLinks] = useState<AssetMediaLink[]>([])
+
+  // Fetch media links if editing
+  useEffect(() => {
+    if (asset?.id) {
+      const fetchMedia = async () => {
+        const { data, error } = await supabase
+          .from("asset_media")
+          .select("*")
+          .eq("asset_id", asset.id)
+        
+        if (data) {
+          setMediaLinks(data as AssetMediaLink[])
+        }
+      }
+      fetchMedia()
+    }
+  }, [asset?.id, supabase])
 
   // Form state
   const [name, setName] = useState(asset?.name || "")
@@ -95,23 +115,11 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
   const [category, setCategory] = useState(asset?.category || "sales")
   const [language, setLanguage] = useState(asset?.language || "en")
   const [description, setDescription] = useState(asset?.description || "")
-  const [urls, setUrls] = useState<Record<string, string>>(asset?.urls || {})
-  const [thumbnailUrl, setThumbnailUrl] = useState(asset?.thumbnail_url || "")
   const [tags, setTags] = useState<string[]>([...new Set(asset?.tags || [])])
   const [newTag, setNewTag] = useState("")
   const [sortOrder, setSortOrder] = useState(asset?.sort_order || 0)
   const [isActive, setIsActive] = useState(asset?.is_active ?? true)
   const [isFeatured, setIsFeatured] = useState(asset?.is_featured ?? false)
-
-  const handleUrlChange = (key: string, value: string) => {
-    if (value.trim()) {
-      setUrls((prev) => ({ ...prev, [key]: value.trim() }))
-    } else {
-      const newUrls = { ...urls }
-      delete newUrls[key]
-      setUrls(newUrls)
-    }
-  }
 
   const toggleTag = (tag: string) => {
     setTags((prev) =>
@@ -142,8 +150,8 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
         category,
         language,
         description: description || null,
-        urls,
-        thumbnail_url: thumbnailUrl || null,
+        urls: {}, // Legacy
+        thumbnail_url: null, // Legacy
         tags,
         sort_order: sortOrder,
         is_active: isActive,
@@ -151,17 +159,53 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
         updated_at: new Date().toISOString(),
       }
 
+      let savedAssetId = asset?.id
+
       if (mode === "create") {
-        const { error } = await supabase.from("assets").insert(assetData)
+        const { data, error } = await supabase
+          .from("assets")
+          .insert(assetData)
+          .select()
+          .single()
+        
         if (error) throw error
+        savedAssetId = data.id
         toast.success("Asset created successfully")
       } else {
         const { error } = await supabase
           .from("assets")
           .update(assetData)
           .eq("id", asset?.id)
+        
         if (error) throw error
         toast.success("Asset updated successfully")
+      }
+
+      // Save media links
+      if (savedAssetId) {
+        // Delete existing
+        await supabase.from("asset_media").delete().eq("asset_id", savedAssetId)
+        
+        // Insert new
+        if (mediaLinks.length > 0) {
+          const linksToInsert = mediaLinks.map(link => ({
+            asset_id: savedAssetId,
+            media_id: link.media_id,
+            role: link.role,
+            language: link.language,
+            version: link.version,
+            is_current: link.is_current
+          }))
+          
+          const { error: mediaError } = await supabase
+            .from("asset_media")
+            .insert(linksToInsert)
+            
+          if (mediaError) {
+            console.error("Error saving media:", mediaError)
+            toast.error("Asset saved but media update failed")
+          }
+        }
       }
 
       router.push("/admin/assets")
@@ -318,51 +362,33 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
           </CardContent>
         </Card>
 
-        {/* URLs */}
-        <Card>
+        {/* Media Manager */}
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-lg">Content URLs</CardTitle>
+            <CardTitle className="text-lg">Media & Files</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {urlFields.map((field) => (
-              <div key={field.key} className="space-y-2">
-                <Label htmlFor={field.key}>{field.label}</Label>
-                <Input
-                  id={field.key}
-                  value={urls[field.key] || ""}
-                  onChange={(e) => handleUrlChange(field.key, e.target.value)}
-                  placeholder="https://..."
-                />
+          <CardContent>
+            {mode === "create" ? (
+              <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+                <p>Save the asset first to add files.</p>
               </div>
-            ))}
+            ) : (
+              <AssetMediaManager
+                assetId={asset!.id}
+                propertyId={propertyId}
+                initialMedia={mediaLinks}
+                onChange={setMediaLinks}
+              />
+            )}
           </CardContent>
         </Card>
 
-        {/* Thumbnail & Display */}
+        {/* Display Settings */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Display Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="thumbnail">Thumbnail URL</Label>
-              <Input
-                id="thumbnail"
-                value={thumbnailUrl}
-                onChange={(e) => setThumbnailUrl(e.target.value)}
-                placeholder="https://..."
-              />
-              {thumbnailUrl && (
-                <div className="mt-2">
-                  <img
-                    src={thumbnailUrl}
-                    alt="Thumbnail preview"
-                    className="w-32 h-24 object-cover rounded border"
-                  />
-                </div>
-              )}
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="sort_order">Sort Order</Label>
               <Input

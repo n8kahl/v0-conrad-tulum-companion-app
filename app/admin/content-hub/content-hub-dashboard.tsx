@@ -69,6 +69,7 @@ const FILE_TYPE_ICONS: Record<MediaFileType, React.ComponentType<{ className?: s
   video: Video,
   document: FileText,
   audio: Music,
+  pdf: FileText,
 }
 
 export function ContentHubDashboard({ initialStats }: ContentHubDashboardProps) {

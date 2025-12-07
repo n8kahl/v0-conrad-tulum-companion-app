@@ -1,60 +1,28 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import {
-  X,
-  Search,
-  Image as ImageIcon,
-  Video,
-  FileText,
-  Music,
-  Check,
-  Upload,
-  Loader2,
-  Grid3X3,
-  List,
-} from "lucide-react"
+import { Search, Filter, Grid3x3, List, CheckSquare, Square, X } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { createClient } from "@/lib/supabase/client"
-import { cn } from "@/lib/utils"
-import type { MediaLibrary, MediaFileType } from "@/lib/supabase/types"
+import type { MediaLibraryItem, NewMediaFileType, MediaSearchFilters } from "@/lib/supabase/types"
 
 interface MediaPickerProps {
   isOpen: boolean
   onClose: () => void
-  onSelect: (mediaIds: string[], mediaItems: MediaLibrary[]) => void
+  onSelect: (mediaIds: string[]) => void
   propertyId?: string
-  selectedIds?: string[]
-  maxSelections?: number
-  filterType?: MediaFileType | "all"
-  title?: string
-}
-
-const FILE_TYPE_ICONS: Record<MediaFileType, React.ComponentType<{ className?: string }>> = {
-  image: ImageIcon,
-  video: Video,
-  document: FileText,
-  audio: Music,
-}
-
-const FILE_TYPE_LABELS: Record<MediaFileType | "all", string> = {
-  all: "All",
-  image: "Images",
-  video: "Videos",
-  document: "Documents",
-  audio: "Audio",
+  allowedTypes?: NewMediaFileType[]
+  multiSelect?: boolean
+  contextFilter?: {
+    venueId?: string
+    assetId?: string
+  }
+  initialSelection?: string[]
 }
 
 export function MediaPicker({
@@ -62,286 +30,208 @@ export function MediaPicker({
   onClose,
   onSelect,
   propertyId,
-  selectedIds = [],
-  maxSelections,
-  filterType = "all",
-  title = "Select Media",
+  allowedTypes,
+  multiSelect = true,
+  contextFilter,
+  initialSelection = [],
 }: MediaPickerProps) {
-  const [media, setMedia] = useState<MediaLibrary[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [activeTab, setActiveTab] = useState<MediaFileType | "all">(filterType)
-  const [selected, setSelected] = useState<Set<string>>(new Set(selectedIds))
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialSelection))
+  const [items, setItems] = useState<MediaLibraryItem[]>([])
+  const [filteredItems, setFilteredItems] = useState<MediaLibraryItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
-  const [uploading, setUploading] = useState(false)
+  const [selectedType, setSelectedType] = useState<NewMediaFileType | "all">("all")
 
-  const supabase = createClient()
-
-  // Fetch media from database
+  // Fetch media items
   useEffect(() => {
     if (!isOpen) return
 
     const fetchMedia = async () => {
-      setLoading(true)
+      setIsLoading(true)
       try {
-        let query = supabase
-          .from("media_library")
-          .select("*")
-          .order("created_at", { ascending: false })
-
-        if (propertyId) {
-          query = query.eq("property_id", propertyId)
+        const params = new URLSearchParams()
+        if (searchQuery) params.set("query", searchQuery)
+        if (propertyId) params.set("propertyId", propertyId)
+        if (allowedTypes?.length) {
+          params.set("fileTypes", allowedTypes.join(","))
         }
 
-        const { data, error } = await query
-
-        if (error) throw error
-        setMedia(data || [])
+        const response = await fetch(`/api/media/search?${params.toString()}`)
+        const data = await response.json()
+        setItems(data.items || [])
       } catch (error) {
         console.error("Failed to fetch media:", error)
+        setItems([])
       } finally {
-        setLoading(false)
+        setIsLoading(false)
       }
     }
 
     fetchMedia()
-  }, [isOpen, propertyId, supabase])
+  }, [isOpen, searchQuery, propertyId, allowedTypes])
 
-  // Reset selection when opening
+  // Filter items by type
   useEffect(() => {
-    if (isOpen) {
-      setSelected(new Set(selectedIds))
-      setSearchQuery("")
-      setActiveTab(filterType)
+    if (selectedType === "all") {
+      setFilteredItems(items)
+    } else {
+      setFilteredItems(items.filter((item) => item.file_type === selectedType))
     }
-  }, [isOpen, selectedIds, filterType])
+  }, [items, selectedType])
 
-  // Filter media based on search and type
-  const filteredMedia = useMemo(() => {
-    return media.filter((item) => {
-      // Type filter
-      if (activeTab !== "all" && item.file_type !== activeTab) {
-        return false
-      }
-
-      // Search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase()
-        return (
-          item.file_name.toLowerCase().includes(query) ||
-          item.tags.some((tag) => tag.toLowerCase().includes(query))
-        )
-      }
-
-      return true
-    })
-  }, [media, activeTab, searchQuery])
-
-  const handleToggleSelect = useCallback(
-    (mediaId: string) => {
-      setSelected((prev) => {
+  const handleSelect = (id: string) => {
+    if (multiSelect) {
+      setSelectedIds((prev) => {
         const next = new Set(prev)
-        if (next.has(mediaId)) {
-          next.delete(mediaId)
+        if (next.has(id)) {
+          next.delete(id)
         } else {
-          if (maxSelections && next.size >= maxSelections) {
-            return prev
-          }
-          next.add(mediaId)
+          next.add(id)
         }
         return next
       })
-    },
-    [maxSelections]
-  )
+    } else {
+      setSelectedIds(new Set([id]))
+    }
+  }
 
-  const handleConfirm = useCallback(() => {
-    const selectedArray = Array.from(selected)
-    const selectedItems = media.filter((m) => selected.has(m.id))
-    onSelect(selectedArray, selectedItems)
+  const handleConfirm = () => {
+    onSelect(Array.from(selectedIds))
     onClose()
-  }, [selected, media, onSelect, onClose])
+  }
 
-  const handleFileUpload = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files
-      if (!files || files.length === 0) return
+  const handleClear = () => {
+    setSelectedIds(new Set())
+  }
 
-      setUploading(true)
-      try {
-        for (const file of Array.from(files)) {
-          // Determine file type
-          let fileType: MediaFileType = "document"
-          if (file.type.startsWith("image/")) fileType = "image"
-          else if (file.type.startsWith("video/")) fileType = "video"
-          else if (file.type.startsWith("audio/")) fileType = "audio"
-
-          // Upload to storage
-          const fileName = `uploads/${Date.now()}-${file.name}`
-          const { error: uploadError } = await supabase.storage
-            .from("media-library")
-            .upload(fileName, file)
-
-          if (uploadError) {
-            console.error("Upload error:", uploadError)
-            continue
-          }
-
-          // Get public URL
-          const { data: urlData } = supabase.storage
-            .from("media-library")
-            .getPublicUrl(fileName)
-
-          // Create database record
-          const { data: mediaRecord, error: dbError } = await supabase
-            .from("media_library")
-            .insert({
-              property_id: propertyId,
-              file_name: file.name,
-              file_type: fileType,
-              mime_type: file.type,
-              storage_path: urlData.publicUrl,
-              file_size: file.size,
-              source: "upload",
-              tags: [],
-            })
-            .select()
-            .single()
-
-          if (dbError) {
-            console.error("Database error:", dbError)
-            continue
-          }
-
-          // Add to local state
-          if (mediaRecord) {
-            setMedia((prev) => [mediaRecord, ...prev])
-          }
-        }
-      } catch (error) {
-        console.error("Upload failed:", error)
-      } finally {
-        setUploading(false)
-        // Reset input
-        e.target.value = ""
-      }
-    },
-    [propertyId, supabase]
-  )
+  // Calculate type counts
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      all: items.length,
+    }
+    items.forEach((item) => {
+      counts[item.file_type] = (counts[item.file_type] || 0) + 1
+    })
+    return counts
+  }, [items])
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl h-[80vh] flex flex-col p-0">
-        <DialogHeader className="px-6 py-4 border-b">
-          <div className="flex items-center justify-between">
-            <DialogTitle>{title}</DialogTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-              >
-                {viewMode === "grid" ? (
-                  <List className="h-4 w-4" />
-                ) : (
-                  <Grid3X3 className="h-4 w-4" />
-                )}
-              </Button>
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Search and Upload */}
-          <div className="flex items-center gap-3 mt-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or tag..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="relative">
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                onChange={handleFileUpload}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                disabled={uploading}
-              />
-              <Button variant="outline" disabled={uploading}>
-                {uploading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4 mr-2" />
-                )}
-                Upload
-              </Button>
-            </div>
-          </div>
-
-          {/* Type Tabs */}
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as MediaFileType | "all")} className="mt-4">
-            <TabsList>
-              {(["all", "image", "video", "document", "audio"] as const).map((type) => (
-                <TabsTrigger key={type} value={type} className="gap-1.5">
-                  {type !== "all" && (
-                    <span className="h-3.5 w-3.5">
-                      {(() => {
-                        const Icon = FILE_TYPE_ICONS[type]
-                        return <Icon className="h-3.5 w-3.5" />
-                      })()}
-                    </span>
-                  )}
-                  {FILE_TYPE_LABELS[type]}
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                    {type === "all"
-                      ? media.length
-                      : media.filter((m) => m.file_type === type).length}
-                  </Badge>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl h-[80vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+          <DialogTitle>Select Media</DialogTitle>
         </DialogHeader>
 
-        {/* Media Grid */}
-        <ScrollArea className="flex-1 px-6 py-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        {/* Toolbar */}
+        <div className="px-6 py-4 border-b space-y-4">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search by filename, alt text, tags..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Filters */}
+          <div className="flex items-center justify-between">
+            <Tabs value={selectedType} onValueChange={(v) => setSelectedType(v as any)}>
+              <TabsList>
+                <TabsTrigger value="all">
+                  All ({typeCounts.all || 0})
+                </TabsTrigger>
+                {allowedTypes?.map((type) => (
+                  <TabsTrigger key={type} value={type}>
+                    {type} ({typeCounts[type] || 0})
+                  </TabsTrigger>
+                )) || (
+                  <>
+                    <TabsTrigger value="image">
+                      Images ({typeCounts.image || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="pdf">
+                      PDFs ({typeCounts.pdf || 0})
+                    </TabsTrigger>
+                    <TabsTrigger value="video">
+                      Videos ({typeCounts.video || 0})
+                    </TabsTrigger>
+                  </>
+                )}
+              </TabsList>
+            </Tabs>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === "grid" ? "default" : "ghost"}
+                size="icon"
+                onClick={() => setViewMode("grid")}
+              >
+                <Grid3x3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "default" : "ghost"}
+                size="icon"
+                onClick={() => setViewMode("list")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
             </div>
-          ) : filteredMedia.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-              <ImageIcon className="h-12 w-12 mb-4 opacity-50" />
-              <p className="text-lg font-medium">No media found</p>
-              <p className="text-sm">Upload some files or adjust your filters</p>
+          </div>
+
+          {/* Selection Info */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center justify-between bg-primary/10 px-4 py-2 rounded">
+              <span className="text-sm font-medium">
+                {selectedIds.size} selected
+              </span>
+              <Button variant="ghost" size="sm" onClick={handleClear}>
+                Clear
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Media Grid */}
+        <ScrollArea className="flex-1 px-6">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <p className="text-gray-500">Loading media...</p>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64">
+              <p className="text-gray-500 mb-2">No media found</p>
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchQuery("")}
+                >
+                  Clear search
+                </Button>
+              )}
             </div>
           ) : viewMode === "grid" ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              <AnimatePresence>
-                {filteredMedia.map((item) => (
-                  <MediaGridItem
-                    key={item.id}
-                    item={item}
-                    isSelected={selected.has(item.id)}
-                    onToggle={() => handleToggleSelect(item.id)}
-                  />
-                ))}
-              </AnimatePresence>
+            <div className="grid grid-cols-4 gap-4 pb-4">
+              {filteredItems.map((item) => (
+                <MediaGridItem
+                  key={item.id}
+                  item={item}
+                  isSelected={selectedIds.has(item.id)}
+                  onSelect={handleSelect}
+                />
+              ))}
             </div>
           ) : (
-            <div className="space-y-2">
-              {filteredMedia.map((item) => (
+            <div className="space-y-2 pb-4">
+              {filteredItems.map((item) => (
                 <MediaListItem
                   key={item.id}
                   item={item}
-                  isSelected={selected.has(item.id)}
-                  onToggle={() => handleToggleSelect(item.id)}
+                  isSelected={selectedIds.has(item.id)}
+                  onSelect={handleSelect}
                 />
               ))}
             </div>
@@ -349,163 +239,155 @@ export function MediaPicker({
         </ScrollArea>
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t bg-muted/30">
-          <div className="flex items-center justify-between w-full">
-            <p className="text-sm text-muted-foreground">
-              {selected.size} selected
-              {maxSelections && ` (max ${maxSelections})`}
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button onClick={handleConfirm} disabled={selected.size === 0}>
-                <Check className="h-4 w-4 mr-2" />
-                Add Selected
-              </Button>
-            </div>
-          </div>
-        </DialogFooter>
+        <div className="px-6 py-4 border-t flex items-center justify-between">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirm}
+            disabled={selectedIds.size === 0}
+          >
+            Select {selectedIds.size > 0 && `(${selectedIds.size})`}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )
 }
 
 interface MediaGridItemProps {
-  item: MediaLibrary
+  item: MediaLibraryItem
   isSelected: boolean
-  onToggle: () => void
+  onSelect: (id: string) => void
 }
 
-function MediaGridItem({ item, isSelected, onToggle }: MediaGridItemProps) {
-  const Icon = FILE_TYPE_ICONS[item.file_type]
+function MediaGridItem({ item, isSelected, onSelect }: MediaGridItemProps) {
+  const thumbnailUrl = item.thumbnail_path
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${item.thumbnail_path}`
+    : null
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
+    <div
+      onClick={() => onSelect(item.id)}
       className={cn(
-        "relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all",
+        "relative aspect-square rounded-lg overflow-hidden cursor-pointer transition-all",
+        "border-2",
         isSelected
           ? "border-primary ring-2 ring-primary/20"
-          : "border-transparent hover:border-muted-foreground/30"
+          : "border-transparent hover:border-gray-300"
       )}
-      onClick={onToggle}
     >
-      {item.file_type === "image" ? (
+      {thumbnailUrl ? (
         <img
-          src={item.thumbnail_path || item.storage_path}
-          alt={item.file_name}
+          src={thumbnailUrl}
+          alt={item.alt_text || item.original_filename}
           className="w-full h-full object-cover"
         />
-      ) : item.file_type === "video" ? (
-        <div className="w-full h-full bg-muted flex items-center justify-center">
-          {item.thumbnail_path ? (
-            <img
-              src={item.thumbnail_path}
-              alt={item.file_name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <Video className="h-8 w-8 text-muted-foreground" />
-          )}
-        </div>
       ) : (
-        <div className="w-full h-full bg-muted flex items-center justify-center">
-          <Icon className="h-8 w-8 text-muted-foreground" />
+        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+          <span className="text-2xl font-bold text-gray-400">
+            {item.file_type.toUpperCase()}
+          </span>
         </div>
       )}
 
-      {/* Selection indicator */}
+      {/* Selection Indicator */}
       <div
         className={cn(
-          "absolute top-2 right-2 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
-          isSelected
-            ? "bg-primary border-primary text-primary-foreground"
-            : "bg-white/80 border-gray-300"
+          "absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-colors",
+          isSelected ? "bg-primary text-white" : "bg-white/80 text-gray-600"
         )}
       >
-        {isSelected && <Check className="h-3.5 w-3.5" />}
+        {isSelected ? (
+          <CheckSquare className="h-4 w-4" />
+        ) : (
+          <Square className="h-4 w-4" />
+        )}
       </div>
 
-      {/* File type badge */}
-      <div className="absolute bottom-2 left-2">
-        <Badge variant="secondary" className="text-xs bg-black/60 text-white border-0">
-          {item.file_type}
-        </Badge>
-      </div>
-    </motion.div>
+      {/* Tags */}
+      {(item.ai_tags.length > 0 || item.custom_tags.length > 0) && (
+        <div className="absolute bottom-2 left-2 flex gap-1">
+          {[...item.custom_tags, ...item.ai_tags].slice(0, 2).map((tag: string) => (
+            <Badge key={tag} variant="secondary" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
 interface MediaListItemProps {
-  item: MediaLibrary
+  item: MediaLibraryItem
   isSelected: boolean
-  onToggle: () => void
+  onSelect: (id: string) => void
 }
 
-function MediaListItem({ item, isSelected, onToggle }: MediaListItemProps) {
-  const Icon = FILE_TYPE_ICONS[item.file_type]
-
-  const formatFileSize = (bytes: number | null) => {
-    if (!bytes) return "Unknown"
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  }
+function MediaListItem({ item, isSelected, onSelect }: MediaListItemProps) {
+  const thumbnailUrl = item.thumbnail_path
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${item.thumbnail_path}`
+    : null
 
   return (
     <div
+      onClick={() => onSelect(item.id)}
       className={cn(
-        "flex items-center gap-4 p-3 rounded-lg border cursor-pointer transition-all",
+        "flex items-center gap-4 p-3 rounded-lg cursor-pointer transition-all",
+        "border",
         isSelected
           ? "border-primary bg-primary/5"
-          : "border-border hover:bg-muted/50"
+          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
       )}
-      onClick={onToggle}
     >
       {/* Thumbnail */}
-      <div className="w-16 h-16 rounded-md overflow-hidden bg-muted flex-shrink-0">
-        {item.file_type === "image" ? (
+      <div className="w-16 h-16 flex-shrink-0 rounded overflow-hidden bg-gray-100">
+        {thumbnailUrl ? (
           <img
-            src={item.thumbnail_path || item.storage_path}
-            alt={item.file_name}
+            src={thumbnailUrl}
+            alt={item.alt_text || item.original_filename}
             className="w-full h-full object-cover"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Icon className="h-6 w-6 text-muted-foreground" />
+            <span className="text-xs font-bold text-gray-400">
+              {item.file_type.toUpperCase()}
+            </span>
           </div>
         )}
       </div>
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{item.file_name}</p>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span className="capitalize">{item.file_type}</span>
-          <span>•</span>
-          <span>{formatFileSize(item.file_size)}</span>
-          {item.tags.length > 0 && (
-            <>
-              <span>•</span>
-              <span>{item.tags.slice(0, 2).join(", ")}</span>
-            </>
+        <p className="font-medium truncate">{item.original_filename}</p>
+        {item.alt_text && (
+          <p className="text-sm text-gray-500 truncate">{item.alt_text}</p>
+        )}
+        <div className="flex items-center gap-2 mt-1">
+          <Badge variant="outline" className="text-xs">
+            {item.file_type}
+          </Badge>
+          {item.file_size_bytes && (
+            <span className="text-xs text-gray-400">
+              {(item.file_size_bytes / 1024 / 1024).toFixed(1)} MB
+            </span>
           )}
         </div>
       </div>
 
-      {/* Selection checkbox */}
+      {/* Selection Indicator */}
       <div
         className={cn(
-          "w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0",
-          isSelected
-            ? "bg-primary border-primary text-primary-foreground"
-            : "border-gray-300"
+          "w-6 h-6 rounded-full flex items-center justify-center transition-colors flex-shrink-0",
+          isSelected ? "bg-primary text-white" : "bg-gray-200 text-gray-600"
         )}
       >
-        {isSelected && <Check className="h-3.5 w-3.5" />}
+        {isSelected ? (
+          <CheckSquare className="h-4 w-4" />
+        ) : (
+          <Square className="h-4 w-4" />
+        )}
       </div>
     </div>
   )

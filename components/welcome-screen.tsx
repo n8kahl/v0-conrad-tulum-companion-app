@@ -29,7 +29,7 @@ export function WelcomeScreen() {
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/luxury-resort-ocean-view-sunset-conrad-tulum-aeria.jpg"
+          src="https://media.cntraveler.com/photos/6245d3ef538c15fb628ae3cb/16:9/w_2240,c_limit/Conrad%20Tulum_%C2%A9Victor%20Elias_Lobby%20(3).jpg"
           alt="Conrad Tulum Riviera Maya"
           fill
           className="object-cover"

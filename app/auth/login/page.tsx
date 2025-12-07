@@ -4,7 +4,6 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -41,15 +40,19 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-svh w-full overflow-hidden">
-      {/* Background Image */}
+      {/* Background Video */}
       <div className="absolute inset-0 z-0">
-        <Image
-          src="/luxury-resort-ocean-view-sunset-conrad-tulum-aeria.jpg"
-          alt="Conrad Tulum Riviera Maya"
-          fill
-          className="object-cover"
-          priority
-        />
+        <video
+          className="h-full w-full object-cover"
+          autoPlay
+          loop
+          muted
+          playsInline
+          poster="https://media.cntraveler.com/photos/6245d3ef538c15fb628ae3cb/16:9/w_2240,c_limit/Conrad%20Tulum_%C2%A9Victor%20Elias_Lobby%20(3).jpg"
+          aria-hidden="true"
+        >
+          <source src="/api/media/home-video" type="video/mp4" />
+        </video>
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/60" />
       </div>
 

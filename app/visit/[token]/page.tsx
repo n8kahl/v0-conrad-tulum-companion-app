@@ -23,7 +23,16 @@ export default async function ClientVisitPage({
   // Fetch stops with venues
   const { data: stops } = await supabase
     .from("visit_stops")
-    .select("*, venue:venues(*)")
+    .select(`
+      *,
+      venue:venues(
+        *,
+        venue_media(
+          *,
+          media:media_library(*)
+        )
+      )
+    `)
     .eq("site_visit_id", visit.id)
     .order("order_index")
 

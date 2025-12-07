@@ -154,7 +154,7 @@ export interface Profile {
 // Phase 1: Media Library Types
 // ============================================
 
-export type MediaFileType = "image" | "video" | "audio" | "document"
+export type MediaFileType = "image" | "video" | "audio" | "document" | "pdf"
 export type MediaSource = "upload" | "capture" | "ai_generated"
 export type CaptureType = "photo" | "voice_note" | "video"
 export type Sentiment = "positive" | "neutral" | "negative"
@@ -254,4 +254,286 @@ export interface VisitStopExtended extends VisitStop {
   follow_up_required: boolean
   captures?: VisitCapture[]
   annotations?: VisitAnnotation[]
+}
+
+// ============================================
+// Media Library System Types (Migration 007)
+// ============================================
+
+export type NewMediaFileType = 
+  | "image" 
+  | "video" 
+  | "pdf" 
+  | "document" 
+  | "audio" 
+  | "floorplan" 
+  | "360_tour"
+
+export type MediaStatus = "uploading" | "processing" | "ready" | "failed"
+
+export type VenueMediaContext = 
+  | "hero"
+  | "gallery"
+  | "floorplan"
+  | "capacity_chart"
+  | "setup_theater"
+  | "setup_banquet"
+  | "setup_classroom"
+  | "setup_reception"
+  | "menu"
+  | "av_diagram"
+  | "360_tour"
+  | "video_walkthrough"
+  | "previous_event"
+
+export type CaptureTypeExtended = "photo" | "voice_note" | "video_clip" | "annotation"
+export type SentimentExtended = "positive" | "neutral" | "negative" | "excited" | "concerned"
+
+// Media Library - Central repository for all files
+export interface MediaLibraryItem {
+  id: string
+  property_id: string
+  
+  // File info
+  original_filename: string
+  file_type: NewMediaFileType
+  mime_type: string
+  file_size_bytes: number
+  
+  // Storage paths
+  storage_path: string
+  thumbnail_path: string | null
+  preview_path: string | null
+  blurhash: string | null
+  
+  // Processing status
+  status: MediaStatus
+  processed_at: string | null
+  processing_error: string | null
+  
+  // Metadata (JSONB - varies by file type)
+  metadata: {
+    // Images
+    width?: number
+    height?: number
+    exif?: Record<string, unknown>
+    dominant_colors?: string[]
+    
+    // PDFs
+    page_count?: number
+    extracted_text?: string
+    tables?: unknown[]
+    document_type?: string
+    
+    // Videos
+    duration_seconds?: number
+    codec?: string
+    
+    // Audio
+    transcript?: string
+    sentiment?: string
+  }
+  
+  // Tags
+  ai_tags: string[]
+  custom_tags: string[]
+  
+  // Manual metadata
+  title: string | null
+  description: string | null
+  alt_text: string | null
+  
+  // Search
+  searchable_text: string | null
+  
+  // Source tracking
+  uploaded_by: string | null
+  source: "upload" | "camera" | "voice_note" | "import" | "migration"
+  
+  // Audit
+  created_at: string
+  updated_at: string
+}
+
+// Venue Media - Links media to venues with context
+export interface VenueMediaLink {
+  id: string
+  venue_id: string
+  media_id: string
+  
+  // Context
+  context: VenueMediaContext
+  display_order: number
+  is_primary: boolean
+  
+  // Optional caption
+  caption: string | null
+  
+  // Visibility
+  show_on_tour: boolean
+  show_on_public: boolean
+  
+  created_at: string
+  updated_at: string
+  
+  // Relations
+  media?: MediaLibraryItem
+}
+
+// Asset Media - Links media to sales assets (versioned)
+export interface AssetMediaLink {
+  id: string
+  asset_id: string
+  media_id: string
+  
+  // Role
+  role: string // 'primary', 'thumbnail', 'page_1', etc.
+  language: string
+  
+  // Versioning
+  version: number
+  is_current: boolean
+  
+  created_at: string
+  updated_at: string
+  
+  // Relations
+  media?: MediaLibraryItem
+}
+
+// Visit Captures - Enhanced with media library
+export interface VisitCaptureEnhanced {
+  id: string
+  visit_stop_id: string
+  media_id: string
+  
+  // Capture details
+  capture_type: CaptureTypeExtended
+  captured_by: string | null
+  captured_at: string
+  
+  // Voice notes
+  transcript: string | null
+  transcript_summary: string | null
+  sentiment: SentimentExtended | null
+  
+  // Annotations
+  annotation_text: string | null
+  annotation_emoji: string | null
+  
+  // Location
+  location_hint: string | null
+  
+  // Flags
+  is_client_visible: boolean
+  is_highlighted: boolean
+  include_in_recap: boolean
+  
+  created_at: string
+  
+  // Relations
+  media?: MediaLibraryItem
+}
+
+// PDF Extractions - Structured data from PDFs
+export interface PDFExtraction {
+  id: string
+  media_id: string
+  
+  // Page data
+  page_number: number
+  page_thumbnail_path: string | null
+  page_text: string | null
+  
+  // Extracted tables
+  tables: {
+    name?: string
+    headers: string[]
+    rows: string[][]
+  }[]
+  
+  // Content type
+  content_type: "text" | "table" | "image" | "diagram" | "floorplan" | null
+  
+  created_at: string
+}
+
+// Media Collections - Group media for easy access
+export interface MediaCollection {
+  id: string
+  property_id: string
+  
+  name: string
+  description: string | null
+  cover_media_id: string | null
+  
+  // Smart collections
+  is_smart_collection: boolean
+  smart_filter: {
+    file_type?: NewMediaFileType
+    tags?: string[]
+  } | null
+  
+  created_at: string
+  updated_at: string
+  
+  // Relations
+  cover_media?: MediaLibraryItem
+}
+
+export interface MediaCollectionItem {
+  collection_id: string
+  media_id: string
+  display_order: number
+  created_at: string
+  
+  // Relations
+  media?: MediaLibraryItem
+}
+
+// ============================================
+// Helper Types for UI Components
+// ============================================
+
+// Upload state for MediaUploadZone
+export type UploadState = 
+  | { status: "pending" }
+  | { status: "uploading"; progress: number }
+  | { status: "processing"; step: string }
+  | { status: "complete"; mediaId: string; thumbnail: string }
+  | { status: "error"; message: string }
+
+export interface MediaUploadFile {
+  file: File
+  id: string // temp ID
+  state: UploadState
+}
+
+// Media picker selection
+export interface MediaPickerSelection {
+  mediaId: string
+  media: MediaLibraryItem
+}
+
+// Grouped venue media by context
+export interface VenueMediaByContext {
+  context: VenueMediaContext
+  media: (VenueMediaLink & { media: MediaLibraryItem })[]
+}
+
+// Search filters for media picker
+export interface MediaSearchFilters {
+  query?: string
+  fileTypes?: NewMediaFileType[]
+  tags?: string[]
+  status?: MediaStatus[]
+}
+
+// Extended Venue with media relations
+export interface VenueWithMedia extends Venue {
+  media_by_context?: VenueMediaByContext[]
+  hero_image?: MediaLibraryItem
+  gallery_images?: MediaLibraryItem[]
+  floorplans?: MediaLibraryItem[]
+  capacity_charts?: MediaLibraryItem[]
 }

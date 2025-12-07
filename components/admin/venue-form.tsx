@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, X, Plus, Save, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { VenueMediaManager } from "./venue-media-manager"
+import type { VenueMediaLink } from "@/lib/supabase/types"
 
 const venueTypes = [
   { value: "meeting_room", label: "Meeting Room" },
@@ -83,6 +85,25 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
   const router = useRouter()
   const supabase = createClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [mediaLinks, setMediaLinks] = useState<VenueMediaLink[]>([])
+
+  // Fetch media links if editing
+  useEffect(() => {
+    if (venue?.id) {
+      const fetchMedia = async () => {
+        const { data, error } = await supabase
+          .from("venue_media")
+          .select("*")
+          .eq("venue_id", venue.id)
+          .order("display_order")
+        
+        if (data) {
+          setMediaLinks(data as VenueMediaLink[])
+        }
+      }
+      fetchMedia()
+    }
+  }, [venue?.id, supabase])
 
   // Form state
   const [name, setName] = useState(venue?.name || "")
@@ -98,9 +119,6 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
     sqm: venue?.dimensions?.sqm || 0,
   })
   const [features, setFeatures] = useState<string[]>(venue?.features || [])
-  const [images, setImages] = useState<string[]>(venue?.images || [])
-  const [newImageUrl, setNewImageUrl] = useState("")
-  const [floorplanUrl, setFloorplanUrl] = useState(venue?.floorplan_url || "")
   const [mapCoordinates, setMapCoordinates] = useState({
     x: venue?.map_coordinates?.x || 50,
     y: venue?.map_coordinates?.y || 50,
@@ -126,17 +144,6 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
     )
   }
 
-  const addImage = () => {
-    if (newImageUrl.trim()) {
-      setImages((prev) => [...prev, newImageUrl.trim()])
-      setNewImageUrl("")
-    }
-  }
-
-  const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index))
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -153,24 +160,62 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
           sqm: dimensions.sqm || dimensions.length_m * dimensions.width_m,
         },
         features,
-        images,
-        floorplan_url: floorplanUrl || null,
+        images: [], // Legacy field
+        floorplan_url: null, // Legacy field
         map_coordinates: mapCoordinates,
         is_active: isActive,
         updated_at: new Date().toISOString(),
       }
 
+      let savedVenueId = venue?.id
+
       if (mode === "create") {
-        const { error } = await supabase.from("venues").insert(venueData)
+        const { data, error } = await supabase
+          .from("venues")
+          .insert(venueData)
+          .select()
+          .single()
+        
         if (error) throw error
+        savedVenueId = data.id
         toast.success("Venue created successfully")
       } else {
         const { error } = await supabase
           .from("venues")
           .update(venueData)
           .eq("id", venue?.id)
+        
         if (error) throw error
         toast.success("Venue updated successfully")
+      }
+
+      // Save media links
+      if (savedVenueId) {
+        // Delete existing
+        await supabase.from("venue_media").delete().eq("venue_id", savedVenueId)
+        
+        // Insert new
+        if (mediaLinks.length > 0) {
+          const linksToInsert = mediaLinks.map(link => ({
+            venue_id: savedVenueId,
+            media_id: link.media_id,
+            context: link.context,
+            display_order: link.display_order,
+            is_primary: link.is_primary,
+            caption: link.caption,
+            show_on_tour: link.show_on_tour,
+            show_on_public: link.show_on_public
+          }))
+          
+          const { error: mediaError } = await supabase
+            .from("venue_media")
+            .insert(linksToInsert)
+            
+          if (mediaError) {
+            console.error("Error saving media:", mediaError)
+            toast.error("Venue saved but media update failed")
+          }
+        }
       }
 
       router.push("/admin/venues")
@@ -351,16 +396,6 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="floorplan">Floorplan URL</Label>
-              <Input
-                id="floorplan"
-                value={floorplanUrl}
-                onChange={(e) => setFloorplanUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-
             <div className="pt-4 border-t border-border">
               <Label className="mb-3 block">Map Position (%)</Label>
               <p className="text-xs text-muted-foreground mb-3">
@@ -451,51 +486,23 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
           </CardContent>
         </Card>
 
-        {/* Images */}
+        {/* Media Manager */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-lg">Images</CardTitle>
+            <CardTitle className="text-lg">Media & Assets</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                value={newImageUrl}
-                onChange={(e) => setNewImageUrl(e.target.value)}
-                placeholder="Enter image URL..."
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    addImage()
-                  }
-                }}
-              />
-              <Button type="button" onClick={addImage} variant="outline">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {images.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {images.map((url, index) => (
-                  <div
-                    key={index}
-                    className="group relative rounded-lg overflow-hidden border border-border"
-                  >
-                    <img
-                      src={url}
-                      alt={`Venue image ${index + 1}`}
-                      className="w-24 h-24 object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
+          <CardContent>
+            {mode === "create" ? (
+              <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+                <p>Save the venue first to add media and assets.</p>
               </div>
+            ) : (
+              <VenueMediaManager
+                venueId={venue!.id}
+                propertyId={propertyId}
+                initialMedia={mediaLinks}
+                onChange={setMediaLinks}
+              />
             )}
           </CardContent>
         </Card>
