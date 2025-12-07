@@ -9,6 +9,7 @@ The branding management system allows you to customize all branding elements thr
 ### Configurable Elements
 
 **Property Information:**
+
 - Full property name
 - Short name (for headers/mobile)
 - Tagline
@@ -16,6 +17,7 @@ The branding management system allows you to customize all branding elements thr
 - Full description
 
 **Brand Colors:**
+
 - Primary color (buttons, accents)
 - Secondary color (text, backgrounds)
 - Theme color (mobile browser bar)
@@ -23,6 +25,7 @@ The branding management system allows you to customize all branding elements thr
 - Color preview
 
 **Images:**
+
 - Welcome screen background
 - Login page background & video
 - Sign-up page background
@@ -33,11 +36,13 @@ The branding management system allows you to customize all branding elements thr
 - Logo images (optional)
 
 **Contact Information:**
+
 - Sales email
 - Phone number
 - Physical address
 
 **Social Media:**
+
 - Website URL
 - Instagram URL
 - Facebook URL
@@ -82,6 +87,7 @@ Run the migration script to add branding support:
 Retrieves current branding configuration.
 
 **Response:**
+
 ```json
 {
   "property": {
@@ -107,6 +113,7 @@ Retrieves current branding configuration.
 Updates branding configuration (requires authentication).
 
 **Request Body:**
+
 ```json
 {
   "branding_config": { ... },
@@ -117,11 +124,13 @@ Updates branding configuration (requires authentication).
 ## Component Integration
 
 The branding settings component is located at:
+
 ```
 components/admin/branding-settings.tsx
 ```
 
 It's integrated into the settings page:
+
 ```
 app/admin/settings/page.tsx
 ```
@@ -145,7 +154,7 @@ app/admin/settings/page.tsx
 Full TypeScript support with the `BrandingConfig` interface:
 
 ```typescript
-import type { BrandingConfig } from "@/lib/branding/config"
+import type { BrandingConfig } from "@/lib/branding/config";
 ```
 
 ## Migration from Static Config
@@ -180,6 +189,7 @@ If you previously used the static config in `lib/branding/config.ts`:
 ## Future Enhancements
 
 Planned features:
+
 - [ ] Image upload directly from settings page
 - [ ] Multi-property support (switch between properties)
 - [ ] Preview mode to see changes before saving
@@ -200,6 +210,7 @@ Planned features:
 ## Support
 
 For issues or questions:
+
 - Check the `docs/BRANDING_CONFIGURATION.md` for general branding info
 - Review the TypeScript interface in `lib/branding/config.ts`
 - Check the database schema in `scripts/009_branding_configuration.sql`

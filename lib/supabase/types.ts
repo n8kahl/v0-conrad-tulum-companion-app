@@ -93,6 +93,17 @@ export interface Venue {
   images: string[]
   floorplan_url: string | null
   map_coordinates: { x?: number; y?: number }
+  map_image_url: string | null
+  map_image_media_id: string | null
+  parent_venue_id: string | null
+  location: {
+    mapX?: number
+    mapY?: number
+    lat?: number
+    lng?: number
+    building?: string
+    floor?: string
+  } | null
   description: string | null
   is_active: boolean
   created_at: string

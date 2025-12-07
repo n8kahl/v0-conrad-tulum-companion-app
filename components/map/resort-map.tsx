@@ -1,13 +1,14 @@
 "use client"
 
 import type { Venue, VisitStop } from "@/lib/supabase/types"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { createClient } from "@/lib/supabase/client"
 import Image from "next/image"
 import { VenuePin } from "./venue-pin"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Map, ZoomIn, ZoomOut, Maximize2, X, Heart, Users } from "lucide-react"
+import { Map, ZoomIn, ZoomOut, Maximize2, X, Heart, Users, ChevronRight, Home } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getBrandingConfig } from "@/lib/branding/config"
 
@@ -17,6 +18,15 @@ interface ResortMapProps {
   onVenueClick?: (venue: Venue) => void
   showTourRoute?: boolean
   className?: string
+  /**
+   * ID of venue whose map to display (for hierarchical navigation)
+   * If not provided, shows top-level (property) map
+   */
+  currentVenueId?: string
+  /**
+   * Enable hierarchical navigation (zoom into venues with maps)
+   */
+  enableHierarchy?: boolean
 }
 
 export function ResortMap({
@@ -24,14 +34,87 @@ export function ResortMap({
   stops = [],
   onVenueClick,
   showTourRoute = false,
-  className
+  className,
+  currentVenueId,
+  enableHierarchy = false,
 }: ResortMapProps) {
+  const supabase = createClient()
   const [activeVenue, setActiveVenue] = useState<string | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [zoom, setZoom] = useState(1)
+  const [currentVenue, setCurrentVenue] = useState<Venue | null>(null)
+  const [venuePath, setVenuePath] = useState<Array<{id: string, name: string, venue_type: string}>>([])
+  const [childVenues, setChildVenues] = useState<Venue[]>([])
   const branding = getBrandingConfig()
   const mapRef = useRef<HTMLDivElement>(null)
 
+  // Load current venue and hierarchy
+  useEffect(() => {
+    if (!enableHierarchy) return
+
+    const loadVenueHierarchy = async () => {
+      if (currentVenueId) {
+        // Load specific venue
+        const { data: venue } = await supabase
+          .from("venues")
+          .select("*")
+          .eq("id", currentVenueId)
+          .single()
+        
+        if (venue) {
+          setCurrentVenue(venue as Venue)
+        }
+
+        // Load breadcrumb path
+        const { data: path } = await supabase
+          .rpc("get_venue_path", { venue_id: currentVenueId })
+        
+        if (path) {
+          setVenuePath(path)
+        }
+
+        // Load child venues
+        const { data: children } = await supabase
+          .from("venues")
+          .select("*")
+          .eq("parent_venue_id", currentVenueId)
+          .eq("is_active", true)
+        
+        if (children) {
+          setChildVenues(children as Venue[])
+        }
+      } else {
+        // Load property-level venue
+        const { data: property } = await supabase
+          .from("venues")
+          .select("*")
+          .eq("venue_type", "property")
+          .single()
+        
+        if (property) {
+          setCurrentVenue(property as Venue)
+          setVenuePath([{id: property.id, name: property.name, venue_type: property.venue_type}])
+        }
+
+        // Load top-level venues
+        const { data: topLevel } = await supabase
+          .from("venues")
+          .select("*")
+          .is("parent_venue_id", null)
+          .eq("is_active", true)
+        
+        if (topLevel) {
+          setChildVenues(topLevel as Venue[])
+        }
+      }
+    }
+
+    loadVenueHierarchy()
+  }, [currentVenueId, enableHierarchy, supabase])
+
+  // Get venues to display (either from props or from hierarchy)
+  const venuesToDisplay = enableHierarchy ? childVenues : venues
+  
   // Get venue data for stops
   const tourVenues = showTourRoute
     ? stops.map((stop, index) => ({
@@ -39,7 +122,7 @@ export function ResortMap({
         stopNumber: index + 1,
         isFavorited: stop.client_favorited,
       }))
-    : venues.map((venue) => ({
+    : venuesToDisplay.map((venue) => ({
         venue,
         stopNumber: undefined,
         isFavorited: false,
@@ -48,6 +131,19 @@ export function ResortMap({
   const handleVenueClick = (venue: Venue) => {
     setActiveVenue(activeVenue === venue.id ? null : venue.id)
     onVenueClick?.(venue)
+  }
+
+  // Get map image URL (from current venue or branding)
+  const mapImageUrl = enableHierarchy && currentVenue?.map_image_url
+    ? currentVenue.map_image_url
+    : branding.images.resortMap || branding.images.placeholder
+  
+  // Get map coordinates from location.mapX/mapY for hierarchical venues
+  const getVenueMapCoordinates = (venue: Venue) => {
+    if (venue.location?.mapX !== undefined && venue.location?.mapY !== undefined) {
+      return { x: venue.location.mapX, y: venue.location.mapY }
+    }
+    return venue.map_coordinates || { x: 50, y: 50 }
   }
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.25, 2))
@@ -87,16 +183,45 @@ export function ResortMap({
         isFullscreen ? "h-[80vh]" : "aspect-[4/3]"
       )}
     >
+      {/* Breadcrumb Navigation */}
+      {enableHierarchy && venuePath.length > 0 && (
+        <div className="absolute top-4 left-4 z-10">
+          <Card className="shadow-md">
+            <CardContent className="p-2 flex items-center gap-1 text-xs">
+              {venuePath.map((pathVenue, index) => (
+                <div key={pathVenue.id} className="flex items-center gap-1">
+                  {index > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                  <Button
+                    variant={index === 0 ? "ghost" : "link"}
+                    size="sm"
+                    className="h-auto py-1 px-2 text-xs"
+                    onClick={() => {
+                      if (enableHierarchy && pathVenue.id !== currentVenueId) {
+                        window.location.href = `?venueId=${pathVenue.id}`
+                      }
+                    }}
+                  >
+                    {index === 0 && <Home className="h-3 w-3 mr-1" />}
+                    {pathVenue.name}
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Map Image */}
       <div
         className="relative w-full h-full transition-transform duration-200 ease-out"
         style={{ transform: `scale(${zoom})`, transformOrigin: "center" }}
       >
         <Image
-          src={branding.images.resortMap || branding.images.placeholder}
-          alt={`${branding.property.shortName} Resort Map`}
+          src={mapImageUrl}
+          alt={enableHierarchy && currentVenue ? `${currentVenue.name} Map` : `${branding.property.shortName} Resort Map`}
           fill
           className="object-contain"
+          unoptimized
           priority
         />
 
@@ -121,16 +246,19 @@ export function ResortMap({
         )}
 
         {/* Venue Pins */}
-        {tourVenues.map(({ venue, stopNumber, isFavorited }) => (
-          <VenuePin
-            key={venue.id}
-            venue={venue}
-            stopNumber={stopNumber}
-            isFavorited={isFavorited}
-            isActive={activeVenue === venue.id}
-            onClick={() => handleVenueClick(venue)}
-          />
-        ))}
+        {tourVenues.map(({ venue, stopNumber, isFavorited }) => {
+          const coords = getVenueMapCoordinates(venue)
+          return (
+            <VenuePin
+              key={venue.id}
+              venue={{...venue, map_coordinates: coords}}
+              stopNumber={stopNumber}
+              isFavorited={isFavorited}
+              isActive={activeVenue === venue.id}
+              onClick={() => handleVenueClick(venue)}
+            />
+          )
+        })}
       </div>
 
       {/* Zoom Controls */}

@@ -112,6 +112,7 @@ const branding = getBrandingConfig();
 ```
 
 **Admin UI**: Navigate to Settings → Branding Configuration to edit:
+
 - Property info (name, tagline, description)
 - Colors (primary, secondary, theme) with live preview
 - Images (welcome, auth, headers, maps)

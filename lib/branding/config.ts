@@ -27,28 +27,40 @@ export interface BrandingConfig {
   images: {
     // Welcome/Home screen
     welcomeBackground: string
+    welcomeBackgroundMediaId?: string // Optional media_library reference
     welcomeBackgroundAlt?: string // Optional fallback
     
     // Auth pages
     loginBackground: string
+    loginBackgroundMediaId?: string
     loginBackgroundVideo?: string // Optional video background
+    loginBackgroundVideoMediaId?: string
     signUpBackground: string
+    signUpBackgroundMediaId?: string
     
     // Visit pages
     visitHeroDefault: string
+    visitHeroDefaultMediaId?: string
     
     // Headers/logos
     logoLight?: string
+    logoLightMediaId?: string
     logoDark?: string
+    logoDarkMediaId?: string
     favicon: string
+    faviconMediaId?: string
     appleTouchIcon: string
+    appleTouchIconMediaId?: string
     
     // Resort/property specific
     resortMap?: string
+    resortMapMediaId?: string
     aerialView?: string
+    aerialViewMediaId?: string
     
     // Fallback/placeholder
     placeholder: string
+    placeholderMediaId?: string
   }
   typography: {
     fontFamily: {

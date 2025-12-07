@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, X, Save, ArrowLeft, FileText, GripVertical } from "lucide-react"
+import { ImageUploadField } from "@/components/admin/image-upload-field"
 import { toast } from "sonner"
 import Link from "next/link"
 import Image from "next/image"
@@ -203,24 +204,16 @@ export function CollectionForm({ collection, propertyId, mode }: CollectionFormP
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="cover_image">Cover Image URL</Label>
-              <Input
-                id="cover_image"
-                value={coverImageUrl}
-                onChange={(e) => setCoverImageUrl(e.target.value)}
-                placeholder="https://..."
-              />
-              {coverImageUrl && (
-                <div className="mt-2">
-                  <img
-                    src={coverImageUrl}
-                    alt="Cover preview"
-                    className="w-48 h-32 object-cover rounded border"
-                  />
-                </div>
-              )}
-            </div>
+            <ImageUploadField
+              propertyId={propertyId}
+              label="Cover Image"
+              value={coverImageUrl}
+              onUpload={(mediaId, url) => setCoverImageUrl(url)}
+              onRemove={() => setCoverImageUrl("")}
+              aspectRatio="16/9"
+              compact
+              helpText="Collection thumbnail for browse pages"
+            />
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

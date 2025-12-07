@@ -298,8 +298,9 @@ export default function SettingsPage() {
       </Card>
 
       {/* Branding Configuration */}
-      {brandingConfig && (
+      {brandingConfig && property && (
         <BrandingSettings
+          propertyId={property.id}
           initialConfig={brandingConfig}
           onSave={handleSaveBranding}
         />

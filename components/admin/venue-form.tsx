@@ -19,10 +19,14 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, X, Plus, Save, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import { ImageUploadField } from "./image-upload-field"
 import { VenueMediaManager } from "./venue-media-manager"
 import type { VenueMediaLink } from "@/lib/supabase/types"
 
 const venueTypes = [
+  { value: "property", label: "🏨 Property (Root)", hierarchy: true },
+  { value: "building", label: "🏢 Building", hierarchy: true },
+  { value: "floor", label: "📐 Floor", hierarchy: true },
   { value: "meeting_room", label: "Meeting Room" },
   { value: "outdoor", label: "Outdoor" },
   { value: "restaurant", label: "Restaurant" },
@@ -71,6 +75,10 @@ interface Venue {
   images: string[]
   floorplan_url: string | null
   map_coordinates: { x?: number; y?: number }
+  map_image_url: string | null
+  map_image_media_id: string | null
+  parent_venue_id: string | null
+  location: { mapX?: number; mapY?: number; lat?: number; lng?: number; building?: string; floor?: string } | null
   description: string | null
   is_active: boolean
 }
@@ -86,23 +94,48 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
   const supabase = createClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [mediaLinks, setMediaLinks] = useState<VenueMediaLink[]>([])
+  const [parentVenues, setParentVenues] = useState<Array<{id: string, name: string, venue_type: string}>>([])
+  const [childVenues, setChildVenues] = useState<Array<{id: string, name: string, location: any}>>([])
 
-  // Fetch media links if editing
+  // Fetch media links and related venues if editing
   useEffect(() => {
-    if (venue?.id) {
-      const fetchMedia = async () => {
-        const { data, error } = await supabase
+    const fetchData = async () => {
+      // Fetch parent venues (for hierarchy dropdown)
+      const { data: parents } = await supabase
+        .from("venues")
+        .select("id, name, venue_type")
+        .in("venue_type", ["property", "building", "floor"])
+        .order("name")
+      
+      if (parents) {
+        setParentVenues(parents)
+      }
+      
+      if (venue?.id) {
+        // Fetch media links
+        const { data: media } = await supabase
           .from("venue_media")
           .select("*")
           .eq("venue_id", venue.id)
           .order("display_order")
         
-        if (data) {
-          setMediaLinks(data as VenueMediaLink[])
+        if (media) {
+          setMediaLinks(media as VenueMediaLink[])
+        }
+        
+        // Fetch child venues (for map pin editor)
+        const { data: children } = await supabase
+          .from("venues")
+          .select("id, name, location")
+          .eq("parent_venue_id", venue.id)
+          .order("name")
+        
+        if (children) {
+          setChildVenues(children)
         }
       }
-      fetchMedia()
     }
+    fetchData()
   }, [venue?.id, supabase])
 
   // Form state
@@ -122,6 +155,17 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
   const [mapCoordinates, setMapCoordinates] = useState({
     x: venue?.map_coordinates?.x || 50,
     y: venue?.map_coordinates?.y || 50,
+  })
+  const [mapImageUrl, setMapImageUrl] = useState(venue?.map_image_url || "")
+  const [mapImageMediaId, setMapImageMediaId] = useState(venue?.map_image_media_id || "")
+  const [parentVenueId, setParentVenueId] = useState(venue?.parent_venue_id || "")
+  const [location, setLocation] = useState({
+    mapX: venue?.location?.mapX || 50,
+    mapY: venue?.location?.mapY || 50,
+    lat: venue?.location?.lat || 0,
+    lng: venue?.location?.lng || 0,
+    building: venue?.location?.building || "",
+    floor: venue?.location?.floor || "",
   })
   const [isActive, setIsActive] = useState(venue?.is_active ?? true)
 
@@ -163,6 +207,10 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
         images: [], // Legacy field - kept for backward compatibility, new media system is source of truth
         floorplan_url: null, // Legacy field - kept for backward compatibility, new media system is source of truth
         map_coordinates: mapCoordinates,
+        map_image_url: mapImageUrl || null,
+        map_image_media_id: mapImageMediaId || null,
+        parent_venue_id: parentVenueId || null,
+        location,
         is_active: isActive,
         updated_at: new Date().toISOString(),
       }
@@ -483,6 +531,112 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
             <p className="mt-3 text-xs text-muted-foreground">
               Click to toggle features on/off
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Hierarchy & Map */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg">Venue Hierarchy & Map</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="parent_venue">Parent Venue</Label>
+                <Select
+                  value={parentVenueId || "none"}
+                  onValueChange={(val) => setParentVenueId(val === "none" ? "" : val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="None (top-level venue)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (top-level venue)</SelectItem>
+                    {parentVenues.map((pv) => (
+                      <SelectItem key={pv.id} value={pv.id}>
+                        {pv.venue_type === "property" && "🏨 "}
+                        {pv.venue_type === "building" && "🏢 "}
+                        {pv.venue_type === "floor" && "📐 "}
+                        {pv.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Where this venue is located (e.g., a floor inside a building)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Map Pin Position on Parent</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={location.mapX}
+                      onChange={(e) => setLocation(prev => ({ ...prev, mapX: parseFloat(e.target.value) || 50 }))}
+                      placeholder="X %"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">X (% from left)</p>
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={location.mapY}
+                      onChange={(e) => setLocation(prev => ({ ...prev, mapY: parseFloat(e.target.value) || 50 }))}
+                      placeholder="Y %"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Y (% from top)</p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Position of this venue's pin on the parent map (0-100%)
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <ImageUploadField
+                propertyId={propertyId}
+                label="Map Image for This Venue"
+                value={mapImageUrl}
+                onUpload={(mediaId, url) => {
+                  setMapImageUrl(url)
+                  setMapImageMediaId(mediaId)
+                }}
+                onRemove={() => {
+                  setMapImageUrl("")
+                  setMapImageMediaId("")
+                }}
+                aspectRatio="4/3"
+                helpText="Upload a map showing child venues inside this space. Used when visitors click into this venue."
+              />
+            </div>
+
+            {mapImageUrl && childVenues.length > 0 && (
+              <div className="border-t pt-4">
+                <Label className="mb-2 block">Child Venues on This Map</Label>
+                <div className="space-y-2">
+                  {childVenues.map((child) => (
+                    <div key={child.id} className="flex items-center justify-between p-2 bg-muted rounded">
+                      <span className="text-sm">{child.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        Pin: {child.location?.mapX?.toFixed(1) || "50"}%, {child.location?.mapY?.toFixed(1) || "50"}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Edit child venues to adjust their pin positions on this map
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
