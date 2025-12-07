@@ -17,9 +17,20 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, X, Plus, Save, ArrowLeft, Upload as UploadIcon, Link as LinkIcon, ExternalLink } from "lucide-react"
+import { Loader2, X, Plus, Save, ArrowLeft, Upload as UploadIcon, Link as LinkIcon, ExternalLink, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { AssetMediaManager } from "./asset-media-manager"
 import { MediaUploadZone } from "./media-upload-zone"
 import { ImageUploadField } from "./image-upload-field"
@@ -93,6 +104,7 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
   const router = useRouter()
   const supabase = createClient()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [mediaLinks, setMediaLinks] = useState<AssetMediaLink[]>([])
 
   // Source card state (upload/link)
@@ -365,6 +377,29 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
     }
   }
 
+  const handleDelete = async () => {
+    if (!asset?.id) return
+    
+    setIsDeleting(true)
+    try {
+      // Delete asset_media links first
+      await supabase.from("asset_media").delete().eq("asset_id", asset.id)
+      
+      // Delete the asset
+      const { error } = await supabase.from("assets").delete().eq("id", asset.id)
+      
+      if (error) throw error
+      
+      toast.success("Asset deleted successfully")
+      router.push("/admin/assets")
+      router.refresh()
+    } catch (error) {
+      console.error("Delete error:", error)
+      toast.error("Failed to delete asset")
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Header */}
@@ -387,6 +422,40 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {mode === "edit" && asset && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive border-destructive/30"
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Asset</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete &quot;{asset.name}&quot;? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <Button type="button" variant="outline" asChild>
             <Link href="/admin/assets">Cancel</Link>
           </Button>

@@ -6,7 +6,7 @@ SELECT
   v.id as venue_id,
   v.name as venue_name,
   COUNT(vm.id) as media_count,
-  STRING_AGG(vm.context, ', ') as contexts
+  STRING_AGG(vm.context::text, ', ') as contexts
 FROM venues v
 LEFT JOIN venue_media vm ON vm.venue_id = v.id
 GROUP BY v.id, v.name
@@ -17,9 +17,8 @@ SELECT
   v.name as venue_name,
   vm.context,
   vm.is_primary,
-  vm.sort_order,
   ml.id as media_id,
-  ml.file_name,
+  ml.original_filename,
   ml.storage_path,
   ml.thumbnail_path,
   ml.status,
@@ -27,7 +26,7 @@ SELECT
 FROM venue_media vm
 JOIN venues v ON v.id = vm.venue_id
 LEFT JOIN media_library ml ON ml.id = vm.media_id
-ORDER BY v.name, vm.context, vm.sort_order;
+ORDER BY v.name, vm.context, vm.is_primary DESC;
 
 -- 3. Check for orphaned venue_media (media_id doesn't exist)
 SELECT 
@@ -43,7 +42,7 @@ WHERE ml.id IS NULL;
 -- 4. Check media library files that are ready
 SELECT 
   id,
-  file_name,
+  original_filename,
   storage_path,
   thumbnail_path,
   status,
