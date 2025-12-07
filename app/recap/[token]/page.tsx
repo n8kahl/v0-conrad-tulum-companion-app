@@ -25,12 +25,32 @@ export default async function RecapPage({
     notFound()
   }
 
-  // Fetch stops with venues
+  // Fetch stops with venues and venue_media
   const { data: stops } = await supabase
     .from("visit_stops")
-    .select("*, venue:venues(*)")
+    .select(`
+      *,
+      venue:venues(
+        *,
+        venue_media(
+          *,
+          media:media_library(*)
+        )
+      )
+    `)
     .eq("site_visit_id", visit.id)
     .order("order_index")
+
+  // Fetch visit_captures for all stops
+  const stopIds = stops?.map(s => s.id) || []
+  const { data: captures } = await supabase
+    .from("visit_captures")
+    .select(`
+      *,
+      media:media_library(*)
+    `)
+    .in("visit_stop_id", stopIds)
+    .order("captured_at", { ascending: false })
 
   // Fetch property
   const { data: property } = await supabase
@@ -38,6 +58,15 @@ export default async function RecapPage({
     .select("*")
     .eq("id", visit.property_id)
     .single()
+
+  // Fetch client-facing assets for this property
+  const { data: assets } = await supabase
+    .from("assets")
+    .select("*")
+    .eq("property_id", visit.property_id)
+    .eq("is_active", true)
+    .order("sort_order")
+    .order("view_count", { ascending: false })
 
   const favoritedCount = stops?.filter((s) => s.client_favorited).length || 0
 
@@ -118,7 +147,13 @@ export default async function RecapPage({
       </header>
 
       {/* Main Content */}
-      <RecapView visit={visit} stops={stops || []} property={property} />
+      <RecapView 
+        visit={visit} 
+        stops={stops || []} 
+        property={property} 
+        captures={captures || []}
+        assets={assets || []}
+      />
 
       {/* Floating Action Button (Mobile) */}
       <div className="fixed bottom-6 right-6 print:hidden md:hidden">

@@ -1,28 +1,52 @@
 "use client"
 
-import type { SiteVisit, Property, VisitStop, Venue } from "@/lib/supabase/types"
-import { useState } from "react"
+import type { SiteVisit, Property, VisitStop, Venue, Asset } from "@/lib/supabase/types"
+import { useState, useMemo } from "react"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Users, MapPin, Heart, ChevronRight, Building2, FileText, Map, Navigation, Play } from "lucide-react"
+import { Calendar, Users, MapPin, Heart, ChevronRight, Building2, FileText, Map, Navigation, Play, Sparkles, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { ResortMap } from "@/components/map/resort-map"
 import { JourneyTimeline } from "@/components/journey/journey-timeline"
 import { TourMode } from "./tour-mode"
+import { AssetCard } from "@/components/public/asset-card"
 
 interface ClientVisitViewProps {
   visit: SiteVisit
   stops: (VisitStop & { venue: Venue })[]
   property: Property | null
+  assets: Asset[]
 }
 
-export function ClientVisitView({ visit, stops: initialStops, property }: ClientVisitViewProps) {
+export function ClientVisitView({ visit, stops: initialStops, property, assets }: ClientVisitViewProps) {
   const [stops, setStops] = useState(initialStops)
   const [activeStop, setActiveStop] = useState<string | null>(null)
   const [isTourMode, setIsTourMode] = useState(false)
+
+  // Group assets into curated resource bundles
+  const resourceGroups = useMemo(() => {
+    const essentialKeywords = ['general', 'fact', 'official', 'website', 'overview', 'brochure']
+    const planningKeywords = ['event', 'meeting', 'resort map', 'cvent', 'calculator', 'capacity', 'floorplan']
+    const experienceKeywords = ['menu', 'f&b', 'dining', 'spa', 'activities', 'tropical', 'inspire']
+
+    const matchesKeywords = (asset: Asset, keywords: string[]) => {
+      const searchText = `${asset.name} ${asset.description || ''} ${asset.category}`.toLowerCase()
+      return keywords.some(keyword => searchText.includes(keyword.toLowerCase()))
+    }
+
+    const essential = assets.filter(a => matchesKeywords(a, essentialKeywords)).slice(0, 5)
+    const planning = assets.filter(a => matchesKeywords(a, planningKeywords) && !essential.includes(a)).slice(0, 5)
+    const experience = assets.filter(a => matchesKeywords(a, experienceKeywords) && !essential.includes(a) && !planning.includes(a)).slice(0, 5)
+
+    return [
+      { title: 'Essential Facts', description: 'Key information about the resort', assets: essential },
+      { title: 'Event Planning Tools', description: 'Capacities, maps, and planning resources', assets: planning },
+      { title: 'Menus & Experiences', description: 'Dining options and guest activities', assets: experience },
+    ].filter(group => group.assets.length > 0)
+  }, [assets])
 
   const handleStopUpdate = (stopId: string, updates: Partial<VisitStop>) => {
     setStops(stops.map((s) => (s.id === stopId ? { ...s, ...updates } : s)))
@@ -256,6 +280,69 @@ export function ClientVisitView({ visit, stops: initialStops, property }: Client
           firstVenue={stops[0]?.venue || null}
         />
       </section>
+
+      {/* Resources for Your Program */}
+      {resourceGroups.length > 0 && (
+        <section className="mt-12">
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h2 className="text-xl font-light text-foreground">Resources for Your Program</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Fact sheets, maps, menus and tools curated for your visit
+            </p>
+            <p className="text-xs text-muted-foreground/70 mt-1 flex items-center gap-1">
+              <Heart className="h-3 w-3" />
+              Anything you favorite during the tour will appear in your recap
+            </p>
+          </div>
+
+          <div className="space-y-6">
+            {resourceGroups.map((group, index) => (
+              <Card key={index}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-medium flex items-center justify-between">
+                    <div>
+                      <span>{group.title}</span>
+                      <p className="text-xs text-muted-foreground font-normal mt-1">
+                        {group.description}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">
+                      {group.assets.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative -mx-2">
+                    <div className="flex gap-3 overflow-x-auto pb-2 px-2 scrollbar-thin snap-x snap-mandatory">
+                      {group.assets.map((asset) => (
+                        <div
+                          key={asset.id}
+                          className="flex-shrink-0 w-[240px] snap-start"
+                        >
+                          <AssetCard asset={asset} variant="compact" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {assets.length > 15 && (
+            <div className="mt-4 text-center">
+              <Link href="/explore" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors">
+                <FileText className="h-4 w-4" />
+                View full Content Library
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Quick Links */}
       <section className="mt-8 grid gap-4 sm:grid-cols-2">

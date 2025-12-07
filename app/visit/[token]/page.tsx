@@ -39,6 +39,15 @@ export default async function ClientVisitPage({
   // Fetch property
   const { data: property } = await supabase.from("properties").select("*").eq("id", visit.property_id).single()
 
+  // Fetch relevant assets for this visit (client-facing resources)
+  const { data: assets } = await supabase
+    .from("assets")
+    .select("*")
+    .eq("property_id", visit.property_id)
+    .eq("is_active", true)
+    .order("sort_order")
+    .order("view_count", { ascending: false })
+
   return (
     <div className="min-h-svh bg-background">
       {/* Hero Header */}
@@ -76,7 +85,7 @@ export default async function ClientVisitPage({
       </header>
 
       {/* Main Content */}
-      <ClientVisitView visit={visit} stops={stops || []} property={property} />
+      <ClientVisitView visit={visit} stops={stops || []} property={property} assets={assets || []} />
     </div>
   )
 }

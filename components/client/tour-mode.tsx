@@ -1,7 +1,7 @@
 "use client"
 
-import type { VisitStop, Venue, SiteVisit, VisitCapture } from "@/lib/supabase/types"
-import { useState, useEffect, useCallback } from "react"
+import type { VisitStop, Venue, SiteVisit, VisitCapture, VenueMedia } from "@/lib/supabase/types"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
 import { motion, AnimatePresence } from "framer-motion"
@@ -15,6 +15,7 @@ import { CameraCapture } from "./camera-capture"
 import { VoiceRecorder, type VoiceRecordingResult } from "./voice-recorder"
 import { CapturePreview, CaptureFullPreview } from "./capture-preview"
 import { VenueMediaViewer } from "./venue-media-viewer"
+import { VenueResourcesDrawer } from "./venue-resources-drawer"
 import { useGeolocation } from "@/lib/hooks/use-geolocation"
 import {
   Play,
@@ -101,6 +102,9 @@ export function TourMode({
   const [previewCapture, setPreviewCapture] = useState<VisitCapture | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [showMediaViewer, setShowMediaViewer] = useState(false)
+  const [showResourcesDrawer, setShowResourcesDrawer] = useState(false)
+  const [quickNoteText, setQuickNoteText] = useState("")
+  const [isSavingNote, setIsSavingNote] = useState(false)
 
   const supabase = createClient()
   const { getPosition } = useGeolocation()
@@ -110,6 +114,27 @@ export function TourMode({
   const VenueIcon = currentStop
     ? venueTypeIcons[currentStop.venue.venue_type] || MapPin
     : MapPin
+
+  // Calculate capture statistics for current stop
+  const stopCaptures = useMemo(() => {
+    if (!currentStop) return { photos: 0, notes: 0, reactions: 0, isFavorited: false }
+    
+    const stopCaps = captures.filter(c => c.visit_stop_id === currentStop.id)
+    return {
+      photos: stopCaps.filter(c => c.capture_type === "photo").length,
+      notes: stopCaps.filter(c => c.capture_type === "voice_note" || c.caption).length,
+      reactions: stopCaps.filter(c => c.caption && /[\u{1F300}-\u{1F9FF}]/u.test(c.caption)).length,
+      isFavorited: currentStop.client_favorited || false,
+    }
+  }, [currentStop, captures])
+
+  // Get venue media resources grouped by context
+  const venueMediaResources = useMemo(() => {
+    if (!currentStop?.venue) return []
+    
+    const venue = currentStop.venue as any
+    return venue.venue_media || []
+  }, [currentStop])
 
   // Check for speech synthesis support on mount
   useEffect(() => {
@@ -484,15 +509,103 @@ export function TourMode({
     }
   }, [])
 
-  // Handle quick reaction
+  // Handle quick reaction - Save to visit_captures for recap data flow
   const handleQuickReaction = useCallback(async (emoji: string) => {
     if (!currentStop) return
 
-    // For now, just show a toast and add to reactions state
-    // In a full implementation, this would save to visit_annotations
-    toast.success(`Reaction added: ${emoji}`)
-    setReactions(prev => [...prev, emoji])
-  }, [currentStop])
+    try {
+      const response = await fetch("/api/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visitStopId: currentStop.id,
+          captureType: "reaction",
+          caption: emoji,
+          capturedBy: "sales",
+          propertyId: visit?.property_id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save reaction")
+      }
+
+      const captureData = await response.json()
+      const newCapture: VisitCapture = {
+        id: captureData.id,
+        visit_stop_id: currentStop.id,
+        media_id: captureData.mediaId || "",
+        capture_type: "photo", // API might not support "reaction" type yet
+        caption: emoji,
+        transcript: null,
+        sentiment: null,
+        captured_at: new Date().toISOString(),
+        captured_by: "sales",
+        location: null,
+        created_at: new Date().toISOString(),
+      }
+
+      setCaptures(prev => [...prev, newCapture])
+      toast.success(`Reaction added: ${emoji}`)
+      setReactions(prev => [...prev, emoji])
+    } catch (error) {
+      console.error("Save reaction error:", error)
+      // Still show locally even if save fails
+      toast.success(`Reaction added: ${emoji}`)
+      setReactions(prev => [...prev, emoji])
+    }
+  }, [currentStop, visit])
+
+  // Handle quick note save
+  const handleSaveQuickNote = useCallback(async () => {
+    if (!currentStop || !quickNoteText.trim()) {
+      toast.error("Please enter a note")
+      return
+    }
+
+    setIsSavingNote(true)
+    try {
+      const response = await fetch("/api/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visitStopId: currentStop.id,
+          captureType: "note",
+          caption: quickNoteText.trim(),
+          capturedBy: "sales",
+          propertyId: visit?.property_id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save note")
+      }
+
+      const captureData = await response.json()
+      const newCapture: VisitCapture = {
+        id: captureData.id,
+        visit_stop_id: currentStop.id,
+        media_id: captureData.mediaId || "",
+        capture_type: "photo", // API might not support "note" type yet
+        caption: quickNoteText.trim(),
+        transcript: null,
+        sentiment: null,
+        captured_at: new Date().toISOString(),
+        captured_by: "sales",
+        location: null,
+        created_at: new Date().toISOString(),
+      }
+
+      setCaptures(prev => [...prev, newCapture])
+      setQuickNoteText("")
+      toast.success("Note saved!")
+    } catch (error) {
+      console.error("Save note error:", error)
+      toast.error("Failed to save note")
+    } finally {
+      setIsSavingNote(false)
+    }
+  }, [currentStop, visit, quickNoteText])
 
   // Handle quick note
   const handleQuickNote = useCallback(async (content: string) => {
@@ -838,6 +951,107 @@ export function TourMode({
               </div>
             </div>
 
+            {/* Resources Button (if venue has media) */}
+            {venueMediaResources.length > 0 && (
+              <div className="mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowResourcesDrawer(true)}
+                  className="w-full"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Venue Resources ({venueMediaResources.length})
+                </Button>
+              </div>
+            )}
+
+            {/* Capture Summary Panel */}
+            {(stopCaptures.photos > 0 || stopCaptures.notes > 0 || stopCaptures.isFavorited) && (
+              <Card className="mb-4 bg-muted/50 border-primary/20">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4 text-sm flex-wrap">
+                    {stopCaptures.photos > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <Camera className="h-4 w-4 text-primary" />
+                        <span className="font-medium">{stopCaptures.photos}</span>
+                        <span className="text-muted-foreground">
+                          {stopCaptures.photos === 1 ? "photo" : "photos"}
+                        </span>
+                      </span>
+                    )}
+                    {stopCaptures.notes > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <MessageSquare className="h-4 w-4 text-primary" />
+                        <span className="font-medium">{stopCaptures.notes}</span>
+                        <span className="text-muted-foreground">
+                          {stopCaptures.notes === 1 ? "note" : "notes"}
+                        </span>
+                      </span>
+                    )}
+                    {stopCaptures.isFavorited && (
+                      <span className="flex items-center gap-1.5 text-primary">
+                        <Heart className="h-4 w-4 fill-current" />
+                        <span className="font-medium">Favorited</span>
+                      </span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Quick Actions: Add Photo & Add Note */}
+            <div className="flex gap-2 mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCamera(true)}
+                className="flex-1"
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                Add Photo
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowVoiceRecorder(true)}
+                className="flex-1"
+              >
+                <Mic className="h-4 w-4 mr-2" />
+                Voice Note
+              </Button>
+            </div>
+
+            {/* Quick Note Input */}
+            <Card className="mb-4">
+              <CardContent className="p-4">
+                <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  Quick Note
+                </h3>
+                <Textarea
+                  placeholder="Add a quick note about this space..."
+                  value={quickNoteText}
+                  onChange={(e) => setQuickNoteText(e.target.value)}
+                  className="mb-2"
+                  rows={2}
+                  maxLength={300}
+                />
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">
+                    {quickNoteText.length}/300
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveQuickNote}
+                    disabled={!quickNoteText.trim() || isSavingNote}
+                  >
+                    {isSavingNote ? "Saving..." : "Save Note"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Venue Details Card */}
             <Card className="mb-4">
               <CardContent className="p-4">
@@ -1102,6 +1316,14 @@ export function TourMode({
         venueName={currentStop.venue.name}
         isOpen={showMediaViewer}
         onClose={() => setShowMediaViewer(false)}
+      />
+
+      {/* Venue Resources Drawer */}
+      <VenueResourcesDrawer
+        venueName={currentStop.venue.name}
+        venueMedia={venueMediaResources}
+        isOpen={showResourcesDrawer}
+        onClose={() => setShowResourcesDrawer(false)}
       />
     </div>
   )

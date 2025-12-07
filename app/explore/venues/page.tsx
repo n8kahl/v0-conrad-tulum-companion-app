@@ -8,6 +8,14 @@ import Image from "next/image"
 
 // Helper to get hero image URL from venue media or fallback to legacy field
 function getHeroImageUrl(venue: any): string | null {
+  const toUrl = (path?: string | null) => {
+    if (!path) return null
+    // If already absolute (http/https), use as-is; otherwise serve from Supabase storage bucket
+    return path.startsWith("http://") || path.startsWith("https://")
+      ? path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`
+  }
+
   const heroMedia = venue.venue_media?.find(
     (vm: any) => vm.context === "hero" && vm.show_on_public && vm.is_primary
   ) ?? venue.venue_media?.find(
@@ -18,16 +26,12 @@ function getHeroImageUrl(venue: any): string | null {
   
   const media = heroMedia?.media
   
-  if (media?.thumbnail_path) {
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.thumbnail_path}`
-  }
-  
-  if (media?.storage_path) {
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.storage_path}`
-  }
-  
-  // Fallback to legacy field
-  return venue.images?.[0] || null
+  return (
+    toUrl(media?.thumbnail_path) ??
+    toUrl(media?.storage_path) ??
+    venue.images?.[0] ??
+    null
+  )
 }
 
 export default async function PublicVenuesPage() {

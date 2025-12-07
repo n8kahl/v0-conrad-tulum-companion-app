@@ -27,17 +27,21 @@ export default async function SiteVisitDetailPage({
 
   const [{ data: visit, error }, { data: venues }] = await Promise.all([
     supabase.from("site_visits").select("*").eq("id", id).single(),
-    supabase.from("venues").select("*").eq("is_active", true).order("name"),
+    supabase
+      .from("venues")
+      .select("*, venue_media(*, media:media_library(*))")
+      .eq("is_active", true)
+      .order("name"),
   ])
 
   if (error || !visit) {
     notFound()
   }
 
-  // Fetch stops for this visit
+  // Fetch stops for this visit with venue_media relations
   const { data: stops } = await supabase
     .from("visit_stops")
-    .select("*, venue:venues(*)")
+    .select("*, venue:venues(*, venue_media(*, media:media_library(*)))")
     .eq("site_visit_id", id)
     .order("order_index")
 

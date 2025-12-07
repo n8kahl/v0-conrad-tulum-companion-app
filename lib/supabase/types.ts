@@ -159,7 +159,7 @@ export type MediaSource = "upload" | "capture" | "ai_generated"
 export type CaptureType = "photo" | "voice_note" | "video"
 export type Sentiment = "positive" | "neutral" | "negative"
 export type AnnotationType = "reaction" | "question" | "concern" | "highlight" | "note"
-export type MediaContext = "hero" | "gallery" | "floorplan" | "menu" | "capacity_chart"
+export type MediaContext = "hero" | "gallery" | "floorplan" | "menu" | "capacity_chart" | "av_diagram" | "setup_theater" | "setup_banquet" | "setup_classroom" | "setup_reception" | "360_tour" | "video_walkthrough" | "previous_event"
 export type CapturedBy = "sales" | "client"
 
 export interface MediaLibrary {

@@ -1,11 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import Link from "next/link"
-import Image from "next/image"
 import { useLanguage } from "@/lib/contexts/language-context"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -18,16 +14,8 @@ import {
   Search,
   X,
 } from "lucide-react"
-
-interface Asset {
-  id: string
-  name: string
-  asset_type: string
-  category: string
-  language: string
-  thumbnail_url: string | null
-  description: string | null
-}
+import { AssetCard } from "@/components/public/asset-card"
+import type { Asset } from "@/lib/supabase/types"
 
 interface AssetGridProps {
   assets: Asset[]
@@ -35,6 +23,7 @@ interface AssetGridProps {
   assetTypes: string[]
 }
 
+// Icon mapping for filter chips only
 const assetTypeIcons: Record<string, typeof FileText> = {
   pdf: FileText,
   flipbook: Layout,
@@ -180,48 +169,9 @@ export function AssetGrid({ assets, categories, assetTypes }: AssetGridProps) {
       {/* Assets Grid */}
       {filteredAssets.length > 0 ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredAssets.map((asset) => {
-            const TypeIcon = assetTypeIcons[asset.asset_type] || FileText
-            return (
-              <Link key={asset.id} href={`/explore/assets/${asset.id}`}>
-                <Card className="group overflow-hidden transition-all hover:shadow-md hover:border-primary/20 h-full">
-                  {/* Thumbnail */}
-                  <div className="relative aspect-[4/3] bg-muted">
-                    {asset.thumbnail_url ? (
-                      <Image
-                        src={asset.thumbnail_url}
-                        alt={asset.name}
-                        fill
-                        className="object-cover transition-transform group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <TypeIcon className="h-10 w-10 text-muted-foreground/30" />
-                      </div>
-                    )}
-                    <Badge className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm text-xs capitalize">
-                      {asset.asset_type.replace("_", " ")}
-                    </Badge>
-                  </div>
-
-                  {/* Content */}
-                  <CardContent className="p-4">
-                    <h3 className="font-medium text-foreground text-sm line-clamp-2 group-hover:text-primary transition-colors">
-                      {asset.name}
-                    </h3>
-                    <p className="mt-1 text-xs text-muted-foreground capitalize">
-                      {asset.category}
-                    </p>
-                    {asset.description && (
-                      <p className="mt-2 text-xs text-muted-foreground line-clamp-2">
-                        {asset.description}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </Link>
-            )
-          })}
+          {filteredAssets.map((asset) => (
+            <AssetCard key={asset.id} asset={asset} variant="default" />
+          ))}
         </div>
       ) : (
         <div className="text-center py-16">

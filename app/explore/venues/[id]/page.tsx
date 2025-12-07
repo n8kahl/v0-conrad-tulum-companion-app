@@ -15,6 +15,13 @@ interface VenuePageProps {
 
 // Helper to get hero image from venue media or fallback to legacy field
 function getHeroImage(venue: any) {
+  const toUrl = (path?: string | null) => {
+    if (!path) return null
+    return path.startsWith("http://") || path.startsWith("https://")
+      ? path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`
+  }
+
   const links = venue.venue_media ?? []
   const heroLink =
     links.find((vm: any) => vm.context === "hero" && vm.show_on_public && vm.is_primary) ??
@@ -23,19 +30,23 @@ function getHeroImage(venue: any) {
 
   const media = heroLink?.media
 
-  if (media?.thumbnail_path) {
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.thumbnail_path}`
-  }
-
-  if (media?.storage_path) {
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.storage_path}`
-  }
-
-  return venue.images?.[0] ?? null
+  return (
+    toUrl(media?.thumbnail_path) ??
+    toUrl(media?.storage_path) ??
+    venue.images?.[0] ??
+    null
+  )
 }
 
 // Helper to get gallery images from venue media or fallback to legacy field
 function getGalleryImages(venue: any) {
+  const toUrl = (path?: string | null) => {
+    if (!path) return null
+    return path.startsWith("http://") || path.startsWith("https://")
+      ? path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`
+  }
+
   const links = (venue.venue_media ?? []).filter(
     (vm: any) => vm.context === "gallery" && vm.show_on_public && vm.media
   )
@@ -50,7 +61,7 @@ function getGalleryImages(venue: any) {
 
     return {
       id: vm.id,
-      url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`,
+      url: toUrl(path),
       alt: media.alt_text || venue.name,
     }
   }).filter(Boolean)
@@ -69,15 +80,21 @@ function getGalleryImages(venue: any) {
 
 // Helper to get floorplan URL from venue media or fallback to legacy field
 function getFloorplanUrl(venue: any): string | null {
+  const toUrl = (path?: string | null) => {
+    if (!path) return null
+    return path.startsWith("http://") || path.startsWith("https://")
+      ? path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`
+  }
+
   const floorplanLink = (venue.venue_media ?? []).find(
     (vm: any) => vm.context === "floorplan" && vm.media
   )
 
-  if (floorplanLink?.media?.storage_path) {
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${floorplanLink.media.storage_path}`
-  }
-
-  return venue.floorplan_url || null
+  return (
+    toUrl(floorplanLink?.media?.storage_path) ??
+    (venue.floorplan_url || null)
+  )
 }
 
 export default async function VenueDetailPage({ params }: VenuePageProps) {

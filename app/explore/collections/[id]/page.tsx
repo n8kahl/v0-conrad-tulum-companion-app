@@ -22,24 +22,18 @@ export default async function CollectionDetailPage({
   }
 
   // Fetch assets in this collection
-  let assets: Array<{
-    id: string
-    name: string
-    asset_type: string
-    category: string
-    thumbnail_url: string | null
-    description: string | null
-    urls: Record<string, string> | null
-  }> = []
+  const assets = []
 
   if (collection.asset_ids && collection.asset_ids.length > 0) {
     const { data } = await supabase
       .from("assets")
-      .select("id, name, asset_type, category, thumbnail_url, description, urls")
+      .select("*")
       .in("id", collection.asset_ids)
       .eq("is_active", true)
 
-    assets = data || []
+    if (data) {
+      assets.push(...data)
+    }
   }
 
   return (

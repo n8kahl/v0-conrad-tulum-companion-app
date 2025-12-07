@@ -1,8 +1,9 @@
 "use client"
 
-import type { SiteVisit, Venue, VisitStop } from "@/lib/supabase/types"
+import type { SiteVisit, Venue, VisitStop, MediaLibrary, VenueMedia } from "@/lib/supabase/types"
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -36,6 +37,7 @@ import {
   Expand,
   Minimize,
   CalendarDays,
+  Eye,
 } from "lucide-react"
 
 const statusColors: Record<string, string> = {
@@ -48,8 +50,45 @@ const statusColors: Record<string, string> = {
 
 interface SiteVisitDetailProps {
   visit: SiteVisit
-  venues: Venue[]
-  stops: (VisitStop & { venue: Venue })[]
+  venues: (Venue & { venue_media?: (VenueMedia & { media: MediaLibrary })[] })[]
+  stops: (VisitStop & { venue: Venue & { venue_media?: (VenueMedia & { media: MediaLibrary })[] } })[]
+}
+
+/**
+ * Helper to extract hero image URL from venue_media relations
+ */
+function getVenueHeroImage(venue: Venue & { venue_media?: (VenueMedia & { media: MediaLibrary })[] }): string | null {
+  const toUrl = (path?: string | null) => {
+    if (!path) return null
+    return path.startsWith("http://") || path.startsWith("https://")
+      ? path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`
+  }
+
+  if (!venue.venue_media || venue.venue_media.length === 0) return null
+  
+  // Find hero image first (prefer primary), then fallback to first gallery image
+  const heroMedia = venue.venue_media.find((vm) => vm.context === "hero" && vm.is_primary) 
+    ?? venue.venue_media.find((vm) => vm.context === "hero")
+  
+  if (heroMedia?.media) {
+    const media = heroMedia.media
+    return toUrl(media.thumbnail_path) ?? toUrl(media.storage_path)
+  }
+  
+  // Fallback to first gallery image
+  const galleryMedia = venue.venue_media.find((vm) => vm.context === "gallery")
+  if (galleryMedia?.media?.storage_path) return toUrl(galleryMedia.media.storage_path)
+  
+  return null
+}
+
+/**
+ * Helper to get venue capacity for a specific setup type
+ */
+function getVenueCapacity(venue: Venue, setupType: string): number | null {
+  if (!venue.capacities || typeof venue.capacities !== 'object') return null
+  return (venue.capacities as Record<string, number>)[setupType] || null
 }
 
 export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialStops }: SiteVisitDetailProps) {
@@ -219,6 +258,7 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
 
   const [expandedStop, setExpandedStop] = useState<string | null>(null)
   const [newPhotoUrl, setNewPhotoUrl] = useState("")
+  const [showPreview, setShowPreview] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -241,6 +281,15 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant={showPreview ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowPreview(!showPreview)}
+            className="gap-2"
+          >
+            <Eye className="h-4 w-4" />
+            {showPreview ? "Hide" : "Show"} Preview
+          </Button>
           <Select value={visit.status} onValueChange={updateStatus}>
             <SelectTrigger className="w-[160px]">
               <SelectValue />
@@ -256,7 +305,7 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className={`grid gap-6 ${showPreview ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Client Details */}
@@ -356,9 +405,10 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
                       key={stop.id}
                       className="p-4 rounded-lg border border-border bg-muted/30 space-y-3"
                     >
-                      {/* Header row */}
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col gap-1">
+                      {/* Header row with thumbnail */}
+                      <div className="flex items-start gap-3">
+                        {/* Reorder buttons */}
+                        <div className="flex flex-col gap-1 pt-1">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -378,35 +428,71 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
                             <ChevronDown className="h-4 w-4" />
                           </Button>
                         </div>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+
+                        {/* Stop number badge */}
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium shrink-0 mt-1">
                           {index + 1}
                         </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-foreground">{stop.venue?.name}</p>
+
+                        {/* Venue thumbnail */}
+                        {stop.venue && (
+                          <div className="relative w-16 h-16 rounded-md overflow-hidden bg-muted shrink-0">
+                            {getVenueHeroImage(stop.venue) ? (
+                              <Image
+                                src={getVenueHeroImage(stop.venue)!}
+                                alt={stop.venue.name}
+                                fill
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <MapPin className="h-6 w-6 text-muted-foreground/30" />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Venue info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">{stop.venue?.name}</p>
                           <p className="text-xs text-muted-foreground capitalize">
                             {stop.venue?.venue_type.replace("_", " ")}
                           </p>
+                          {/* Capacity chips */}
+                          {stop.venue && (stop.venue.capacities as Record<string, number> | null) && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {Object.entries(stop.venue.capacities as Record<string, number>).slice(0, 3).map(([setup, capacity]) => (
+                                <Badge key={setup} variant="outline" className="text-xs h-5">
+                                  {setup}: {capacity}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={`h-8 w-8 ${stop.client_favorited ? "text-yellow-500" : "text-muted-foreground"}`}
-                          onClick={() => toggleFavorite(stop.id, stop.client_favorited || false)}
-                        >
-                          <Star className={`h-4 w-4 ${stop.client_favorited ? "fill-current" : ""}`} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => removeStop(stop.id)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-1 pt-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`h-8 w-8 ${stop.client_favorited ? "text-yellow-500" : "text-muted-foreground"}`}
+                            onClick={() => toggleFavorite(stop.id, stop.client_favorited || false)}
+                          >
+                            <Star className={`h-4 w-4 ${stop.client_favorited ? "fill-current" : ""}`} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => removeStop(stop.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {/* Details row */}
-                      <div className="flex items-start gap-4 pl-14">
+                      <div className="flex items-start gap-4 pl-28">
                         <div className="flex items-center gap-2">
                           <Clock className="h-4 w-4 text-muted-foreground" />
                           <Input
@@ -434,7 +520,7 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
 
                       {/* Expanded details */}
                       {expandedStop === stop.id && (
-                        <div className="pl-14 space-y-4 pt-2 border-t border-border/50">
+                        <div className="pl-28 space-y-4 pt-2 border-t border-border/50">
                           {/* Sales Notes */}
                           <div className="space-y-2">
                             <label className="text-xs font-medium text-muted-foreground">Sales Notes</label>
@@ -462,40 +548,14 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
                             />
                           </div>
 
-                          {/* Photos */}
+                          {/* Captured Media */}
                           <div className="space-y-2">
                             <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                               <Camera className="h-3 w-3" />
-                              Photos & Media
+                              Captured Media
                             </label>
-                            <div className="flex gap-2">
-                              <Input
-                                placeholder="Paste photo/video URL..."
-                                value={newPhotoUrl}
-                                onChange={(e) => setNewPhotoUrl(e.target.value)}
-                                className="flex-1 h-8"
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
-                                    e.preventDefault()
-                                    addPhoto(stop.id, newPhotoUrl)
-                                    setNewPhotoUrl("")
-                                  }
-                                }}
-                              />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  addPhoto(stop.id, newPhotoUrl)
-                                  setNewPhotoUrl("")
-                                }}
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            {stop.photos && stop.photos.length > 0 && (
-                              <div className="flex flex-wrap gap-2 mt-2">
+                            {stop.photos && stop.photos.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
                                 {stop.photos.map((photo, photoIndex) => (
                                   <div
                                     key={photoIndex}
@@ -516,10 +576,14 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
                                   </div>
                                 ))}
                               </div>
+                            ) : (
+                              <div className="flex items-center gap-2 py-3 px-4 rounded-md bg-muted/50 border border-dashed">
+                                <Camera className="h-4 w-4 text-muted-foreground" />
+                                <p className="text-xs text-muted-foreground">
+                                  Media captured during tour will appear here
+                                </p>
+                              </div>
                             )}
-                            <p className="text-xs text-muted-foreground">
-                              Tip: Upload photos to a service like Imgur or Google Photos and paste the URL here
-                            </p>
                           </div>
                         </div>
                       )}
@@ -582,6 +646,114 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
             </Card>
           )}
         </div>
+
+        {/* Live Preview Panel */}
+        {showPreview && (
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="sticky top-6">
+              <CardHeader className="border-b">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Eye className="h-4 w-4 text-primary" />
+                  Client View Preview
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+                {/* Preview header */}
+                <div className="space-y-2">
+                  <h2 className="text-xl font-light">{visit.client_company}</h2>
+                  <p className="text-sm text-muted-foreground capitalize">
+                    {visit.group_type} Event
+                  </p>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    {visit.visit_date && (
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(visit.visit_date).toLocaleDateString()}
+                      </div>
+                    )}
+                    {visit.estimated_attendees && (
+                      <div className="flex items-center gap-1">
+                        <Users className="h-3 w-3" />
+                        {visit.estimated_attendees} guests
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium mb-3">Your Tour</h3>
+                  {stops.length > 0 ? (
+                    <div className="space-y-3">
+                      {stops.map((stop, index) => (
+                        <div
+                          key={stop.id}
+                          className="p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow"
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* Stop number */}
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium shrink-0">
+                              {index + 1}
+                            </div>
+
+                            {/* Venue thumbnail (smaller in preview) */}
+                            {stop.venue && (
+                              <div className="relative w-12 h-12 rounded overflow-hidden bg-muted shrink-0">
+                                {getVenueHeroImage(stop.venue) ? (
+                                  <Image
+                                    src={getVenueHeroImage(stop.venue)!}
+                                    alt={stop.venue.name}
+                                    fill
+                                    className="object-cover"
+                                  />
+                                ) : (
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <MapPin className="h-5 w-5 text-muted-foreground/30" />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Venue info */}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">
+                                {stop.venue?.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground capitalize">
+                                {stop.venue?.venue_type.replace("_", " ")}
+                              </p>
+                              {stop.scheduled_time && (
+                                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {stop.scheduled_time}
+                                </p>
+                              )}
+                              {stop.client_favorited && (
+                                <Badge variant="outline" className="mt-1 text-xs h-5 gap-1">
+                                  <Star className="h-3 w-3 fill-current text-yellow-500" />
+                                  Favorited
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground text-center py-6">
+                      No venues in tour yet
+                    </p>
+                  )}
+                </div>
+
+                <div className="text-xs text-muted-foreground pt-4 border-t">
+                  <p className="italic">
+                    This is a live preview of what your client sees.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

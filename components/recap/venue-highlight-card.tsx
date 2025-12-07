@@ -1,18 +1,27 @@
 "use client"
 
-import type { VisitStop, Venue } from "@/lib/supabase/types"
+import type { VisitStop, Venue, VisitCapture } from "@/lib/supabase/types"
 import Image from "next/image"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Heart, Users, Maximize2, MapPin, Camera } from "lucide-react"
+import { Heart, Users, Maximize2, MapPin, Camera, MessageSquare } from "lucide-react"
+import { pickRecapHeroForVenue, computeVenueRecapStats } from "@/lib/recap/helpers"
 
 interface VenueHighlightCardProps {
   stop: VisitStop & { venue: Venue }
   index: number
+  captures: VisitCapture[]
 }
 
 // Helper to get hero image URL from venue media or fallback to legacy field
 function getHeroImageUrl(venue: any): string | null {
+  const toUrl = (path?: string | null) => {
+    if (!path) return null
+    return path.startsWith("http://") || path.startsWith("https://")
+      ? path
+      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`
+  }
+
   const heroMedia = venue.venue_media?.find(
     (vm: any) => vm.context === "hero" && vm.is_primary
   ) ?? venue.venue_media?.find(
@@ -21,21 +30,28 @@ function getHeroImageUrl(venue: any): string | null {
   
   const media = heroMedia?.media
   
-  if (media?.thumbnail_path) {
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.thumbnail_path}`
-  }
-  
-  if (media?.storage_path) {
-    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.storage_path}`
-  }
-  
-  // Fallback to legacy field
-  return venue.images?.[0] || null
+  return (
+    toUrl(media?.thumbnail_path) ??
+    toUrl(media?.storage_path) ??
+    venue.images?.[0] ??
+    null
+  )
 }
 
-export function VenueHighlightCard({ stop, index }: VenueHighlightCardProps) {
+export function VenueHighlightCard({ stop, index, captures }: VenueHighlightCardProps) {
   const venue = stop.venue
-  const heroImageUrl = getHeroImageUrl(venue)
+  
+  // Use helper to pick best hero image (prioritizes tour captures)
+  const { heroUrl, from } = pickRecapHeroForVenue({ venue, captures })
+  
+  // Compute capture statistics
+  const stats = computeVenueRecapStats({ 
+    captures, 
+    isFavorited: stop.client_favorited 
+  })
+  
+  // Keep legacy helper for backwards compatibility
+  const heroImageUrl = heroUrl || getHeroImageUrl(venue)
 
   return (
     <Card className="overflow-hidden print:break-inside-avoid">
@@ -85,6 +101,30 @@ export function VenueHighlightCard({ stop, index }: VenueHighlightCardProps) {
             <p className="mt-3 text-sm text-muted-foreground line-clamp-2">
               {venue.description}
             </p>
+          )}
+
+          {/* Capture Stats */}
+          {stats.hasCaptures && (
+            <div className="mt-3 flex items-center gap-3 text-sm text-primary bg-primary/5 rounded-md px-3 py-2">
+              {stats.photoCount > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <Camera className="h-4 w-4" />
+                  <span className="font-medium">{stats.photoCount}</span>
+                  <span className="text-muted-foreground">
+                    {stats.photoCount === 1 ? "photo" : "photos"}
+                  </span>
+                </span>
+              )}
+              {stats.noteCount > 0 && (
+                <span className="flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4" />
+                  <span className="font-medium">{stats.noteCount}</span>
+                  <span className="text-muted-foreground">
+                    {stats.noteCount === 1 ? "note" : "notes"}
+                  </span>
+                </span>
+              )}
+            </div>
           )}
 
           {/* Key Stats */}

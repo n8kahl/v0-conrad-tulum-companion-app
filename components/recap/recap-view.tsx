@@ -1,12 +1,13 @@
 "use client"
 
-import type { SiteVisit, Property, VisitStop, Venue, VenueType } from "@/lib/supabase/types"
+import type { SiteVisit, Property, VisitStop, Venue, VenueType, VisitCapture, Asset } from "@/lib/supabase/types"
 import { useMemo } from "react"
 import { motion } from "framer-motion"
 import { VenueHighlightCard } from "./venue-highlight-card"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { AssetBundleStrip } from "@/components/public/asset-bundle-strip"
 import {
   Calendar,
   Users,
@@ -43,6 +44,8 @@ interface RecapViewProps {
   visit: SiteVisit
   stops: (VisitStop & { venue: Venue })[]
   property: Property | null
+  captures: VisitCapture[]
+  assets: Asset[]
 }
 
 // Derive program scenarios based on tour stops
@@ -140,13 +143,18 @@ function deriveScenarios(
   return scenarios.sort((a, b) => b.matchingStops.length - a.matchingStops.length).slice(0, 3)
 }
 
-export function RecapView({ visit, stops, property }: RecapViewProps) {
+export function RecapView({ visit, stops, property, captures, assets }: RecapViewProps) {
   const favoritedStops = stops.filter((s) => s.client_favorited)
   const allStops = stops
-  const tourPhotosCount = stops.reduce(
-    (acc, s) => acc + (s.photos?.length || 0),
-    0
-  )
+  
+  // Count actual tour photos from captures
+  const tourPhotosCount = captures.filter(c => c.capture_type === "photo").length
+  
+  // Helper function to match assets by keywords
+  const matchesKeywords = (asset: Asset, keywords: string[]) => {
+    const searchText = `${asset.name} ${asset.description || ""} ${asset.tags?.join(" ") || ""}`.toLowerCase()
+    return keywords.some(keyword => searchText.includes(keyword.toLowerCase()))
+  }
 
   // Derive program scenarios from stops
   const scenarios = useMemo(() => deriveScenarios(stops), [stops])
@@ -326,16 +334,23 @@ export function RecapView({ visit, stops, property }: RecapViewProps) {
             </h2>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
-            {favoritedStops.map((stop, index) => (
-              <motion.div
-                key={stop.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: 0.2 + index * 0.1 }}
-              >
-                <VenueHighlightCard stop={stop} index={index} />
-              </motion.div>
-            ))}
+            {favoritedStops.map((stop, index) => {
+              const stopCaptures = captures.filter(c => c.visit_stop_id === stop.id)
+              return (
+                <motion.div
+                  key={stop.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.2 + index * 0.1 }}
+                >
+                  <VenueHighlightCard 
+                    stop={stop} 
+                    index={index} 
+                    captures={stopCaptures}
+                  />
+                </motion.div>
+              )
+            })}
           </div>
         </motion.section>
       )}
@@ -442,11 +457,63 @@ export function RecapView({ visit, stops, property }: RecapViewProps) {
         </Card>
       </motion.section>
 
+      {/* Planning Resources */}
+      {assets.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          className="mb-8"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <FileText className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold text-foreground">
+              Planning Resources
+            </h2>
+          </div>
+          <div className="space-y-6">
+            {matchesKeywords({ 
+              name: "", 
+              description: "", 
+              tags: ["fact", "capacity", "chart"] 
+            } as Asset, ["fact"]) && (
+              <AssetBundleStrip
+                title="Fact Sheets & Capacity Charts"
+                assets={assets.filter(a => matchesKeywords(a, ["fact", "capacity", "chart", "venue", "space"]))}
+                viewAllHref="/explore/assets?category=events"
+              />
+            )}
+            {matchesKeywords({ 
+              name: "", 
+              description: "", 
+              tags: ["map"] 
+            } as Asset, ["map"]) && (
+              <AssetBundleStrip
+                title="Resort Maps & Guides"
+                assets={assets.filter(a => matchesKeywords(a, ["map", "guide", "directory", "resort"]))}
+                viewAllHref="/explore/assets?category=maps"
+              />
+            )}
+            {matchesKeywords({ 
+              name: "", 
+              description: "", 
+              tags: ["menu"] 
+            } as Asset, ["menu"]) && (
+              <AssetBundleStrip
+                title="Menus & Culinary Experiences"
+                assets={assets.filter(a => matchesKeywords(a, ["menu", "dining", "culinary", "catering"]))}
+                viewAllHref="/explore/assets?category=dining"
+              />
+            )}
+          </div>
+        </motion.section>
+      )}
+
       {/* Next Steps */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.5 }}
+        transition={{ duration: 0.4, delay: 0.6 }}
         className="mb-8 print:hidden"
       >
         <Card className="border-primary/20 bg-primary/5">
@@ -486,7 +553,7 @@ export function RecapView({ visit, stops, property }: RecapViewProps) {
       <motion.footer
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.4, delay: 0.6 }}
+        transition={{ duration: 0.4, delay: 0.7 }}
         className="pt-8 border-t border-border text-center print:pt-12"
       >
         <p className="text-sm text-muted-foreground">

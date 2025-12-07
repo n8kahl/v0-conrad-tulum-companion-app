@@ -7,22 +7,13 @@ import { AssetCarousel } from "@/components/public/asset-carousel"
 import { ShareButton } from "@/components/public/share-button"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, FolderOpen, Globe } from "lucide-react"
+import type { Asset } from "@/lib/supabase/types"
 
 interface Collection {
   id: string
   name: string
   description: string | null
   cover_image_url: string | null
-}
-
-interface Asset {
-  id: string
-  name: string
-  asset_type: string
-  category: string
-  thumbnail_url: string | null
-  description: string | null
-  urls: Record<string, string> | null
 }
 
 interface CollectionDetailClientProps {
