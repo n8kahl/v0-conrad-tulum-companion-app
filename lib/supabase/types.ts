@@ -416,6 +416,64 @@ export interface AssetMediaLink {
   media?: MediaLibraryItem
 }
 
+// Venue Resource Links - Collections and Assets linked to venues
+export interface VenueCollectionLink {
+  id: string
+  venue_id: string
+  collection_id: string
+  context: string // 'general', 'meetings', 'weddings', etc.
+  display_order: number
+  is_featured: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+  
+  // Relations
+  collection?: Collection
+}
+
+export interface VenueAssetLink {
+  id: string
+  venue_id: string
+  asset_id: string
+  context: string // 'general', 'meetings', 'weddings', etc.
+  display_order: number
+  is_featured: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+  
+  // Relations
+  asset?: Asset
+}
+
+// Visit Stop Resource Links - Collections and Assets for specific tour stops
+export interface VisitStopCollectionLink {
+  id: string
+  visit_stop_id: string
+  collection_id: string
+  display_order: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+  
+  // Relations
+  collection?: Collection
+}
+
+export interface VisitStopAssetLink {
+  id: string
+  visit_stop_id: string
+  asset_id: string
+  display_order: number
+  notes: string | null
+  created_at: string
+  updated_at: string
+  
+  // Relations
+  asset?: Asset
+}
+
 // Visit Captures - Enhanced with media library
 export interface VisitCaptureEnhanced {
   id: string
