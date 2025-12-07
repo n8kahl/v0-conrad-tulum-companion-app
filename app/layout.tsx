@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Analytics } from "@vercel/analytics/next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { LanguageProvider } from "@/lib/contexts/language-context"
 import { getBrandingConfig } from "@/lib/branding/config"
@@ -57,7 +56,6 @@ export default function RootLayout({
             {children}
           </ThemeProvider>
         </LanguageProvider>
-        <Analytics />
       </body>
     </html>
   )

@@ -212,7 +212,6 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
         map_image_url: mapImageUrl || null,
         map_image_media_id: mapImageMediaId || null,
         parent_venue_id: parentVenueId || null,
-        location,
         is_active: isActive,
         updated_at: new Date().toISOString(),
       }
