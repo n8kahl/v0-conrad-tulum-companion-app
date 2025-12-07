@@ -5,8 +5,9 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Upload, X, Loader2, Image as ImageIcon, ExternalLink, Check } from "lucide-react"
+import { Upload, X, Loader2, Image as ImageIcon, ExternalLink, Check, FolderOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MediaPicker } from "./media-picker"
 
 interface ImageUploadFieldProps {
   /**
@@ -91,6 +92,7 @@ export function ImageUploadField({
   const [dragActive, setDragActive] = useState(false)
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [urlInput, setUrlInput] = useState(value || "")
+  const [showMediaPicker, setShowMediaPicker] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = useCallback(async (file: File) => {
@@ -230,6 +232,25 @@ export function ImageUploadField({
     }
   }
 
+  const handleSelectFromLibrary = useCallback(async (mediaIds: string[]) => {
+    if (mediaIds.length === 0) return
+    const mediaId = mediaIds[0]
+    
+    try {
+      // Fetch URL from media library
+      const response = await fetch(`/api/media/${mediaId}/url`)
+      if (!response.ok) throw new Error("Failed to get media URL")
+      
+      const data = await response.json()
+      setPreview(data.url)
+      onUpload(mediaId, data.url)
+      setShowMediaPicker(false)
+    } catch (error) {
+      console.error("Error selecting from library:", error)
+      alert("Failed to load image from library")
+    }
+  }, [onUpload])
+
   const previewHeight = compact ? "h-24" : "h-40"
   
   return (
@@ -333,6 +354,21 @@ export function ImageUploadField({
               </>
             )}
           </button>
+          
+          {!isUploading && (
+            <div className="px-6 pb-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMediaPicker(true)}
+                className="w-full"
+              >
+                <FolderOpen className="h-4 w-4 mr-2" />
+                Select from Library
+              </Button>
+            </div>
+          )}
         </div>
       )}
       
@@ -402,6 +438,15 @@ export function ImageUploadField({
       {helpText && (
         <p className="text-xs text-muted-foreground">{helpText}</p>
       )}
+      
+      <MediaPicker
+        isOpen={showMediaPicker}
+        onClose={() => setShowMediaPicker(false)}
+        onSelect={handleSelectFromLibrary}
+        propertyId={propertyId}
+        allowedTypes={["image"]}
+        multiSelect={false}
+      />
     </div>
   )
 }
