@@ -134,7 +134,8 @@ export function ImageUploadField({
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || "Upload failed")
+        console.error("Upload error response:", error)
+        throw new Error(error.details || error.error || "Upload failed")
       }
 
       const data = await response.json()

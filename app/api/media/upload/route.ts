@@ -126,8 +126,15 @@ export async function POST(request: NextRequest) {
 
     if (createError || !mediaRecord) {
       console.error("Error creating media record:", createError)
+      console.error("Property ID:", propertyId)
+      console.error("User ID:", user.id)
+      console.error("File:", { name: file.name, type: file.type, size: file.size })
       return NextResponse.json(
-        { error: "Failed to create media record" },
+        { 
+          error: "Failed to create media record",
+          details: createError?.message || "Unknown error",
+          code: createError?.code
+        },
         { status: 500 }
       )
     }
