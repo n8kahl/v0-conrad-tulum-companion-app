@@ -68,7 +68,10 @@ function getVenueHeroImage(venue: Venue & { venue_media?: (VenueMedia & { media:
     return `${supabaseUrl}/storage/v1/object/public/media-library/${cleanPath}`
   }
 
-  if (!venue.venue_media || venue.venue_media.length === 0) return null
+  if (!venue.venue_media || venue.venue_media.length === 0) {
+    console.log(`No venue_media for venue: ${venue.name}`, { venue_media: venue.venue_media })
+    return null
+  }
   
   // Find hero image first (prefer primary), then fallback to first gallery image
   const heroMedia = venue.venue_media.find((vm) => vm.context === "hero" && vm.is_primary) 
