@@ -15,7 +15,6 @@ import { CameraCapture } from "./camera-capture"
 import { VoiceRecorder, type VoiceRecordingResult } from "./voice-recorder"
 import { CapturePreview, CaptureFullPreview } from "./capture-preview"
 import { VenueMediaViewer } from "./venue-media-viewer"
-import { VenueMediaManager } from "./venue-media-manager"
 import { VenueResourcesDrawer } from "./venue-resources-drawer"
 import { useGeolocation } from "@/lib/hooks/use-geolocation"
 import {
@@ -110,7 +109,6 @@ export function TourMode({
   const [isUploading, setIsUploading] = useState(false)
   const [showMediaViewer, setShowMediaViewer] = useState(false)
   const [showResourcesDrawer, setShowResourcesDrawer] = useState(false)
-  const [showMediaManager, setShowMediaManager] = useState(false)
   const [mediaRefreshKey, setMediaRefreshKey] = useState(0)
   const [liveVenueMedia, setLiveVenueMedia] = useState<VenueMedia[]>([])
 
@@ -822,17 +820,6 @@ export function TourMode({
                 <FileText className="h-4 w-4" />
                 <span className="hidden sm:inline">Resources</span>
               </Button>
-              {propertyId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowMediaManager(true)}
-                  className="gap-1.5 shrink-0"
-                >
-                  <Camera className="h-4 w-4" />
-                  <span className="hidden sm:inline">Add media</span>
-                </Button>
-              )}
               {onShowMapForVenue && (
                 <Button
                   variant="outline"
@@ -1245,18 +1232,6 @@ export function TourMode({
         isOpen={showResourcesDrawer}
         onClose={() => setShowResourcesDrawer(false)}
       />
-
-      {/* Venue Media Manager */}
-      {propertyId && (
-        <VenueMediaManager
-          venueId={currentStop.venue.id}
-          propertyId={propertyId}
-          venueName={currentStop.venue.name}
-          isOpen={showMediaManager}
-          onClose={() => setShowMediaManager(false)}
-          onUpdated={() => setMediaRefreshKey((k) => k + 1)}
-        />
-      )}
     </div>
   )
 }

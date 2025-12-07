@@ -16,7 +16,6 @@ interface VenueMediaViewerProps {
   venueName: string
   isOpen: boolean
   onClose: () => void
-  onManage?: () => void
   refreshKey?: number
 }
 
@@ -41,7 +40,6 @@ export function VenueMediaViewer({
   venueName,
   isOpen,
   onClose,
-  onManage,
   refreshKey,
 }: VenueMediaViewerProps) {
   const [mediaLinks, setMediaLinks] = useState<VenueMediaLink[]>([])
@@ -96,14 +94,7 @@ export function VenueMediaViewer({
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="bottom" className="h-[80vh] rounded-t-xl p-0 flex flex-col">
         <SheetHeader className="px-6 pt-6 pb-4 border-b">
-          <div className="flex items-center justify-between gap-3">
-            <SheetTitle>{venueName} - Resources</SheetTitle>
-            {onManage && (
-              <Button size="sm" variant="outline" onClick={onManage}>
-                Manage media
-              </Button>
-            )}
-          </div>
+          <SheetTitle>{venueName} - Resources</SheetTitle>
         </SheetHeader>
 
         {isLoading ? (
