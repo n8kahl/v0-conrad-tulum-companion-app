@@ -1,6 +1,10 @@
 export type AssetType = "pdf" | "flipbook" | "image" | "video" | "virtual_tour" | "diagram"
 export type AssetCategory = "sales" | "weddings" | "spa" | "events" | "marketing"
-export type VenueType = "meeting_room" | "outdoor" | "restaurant" | "spa" | "pool" | "lobby" | "ballroom" | "beach"
+export type VenueType = 
+  // Hierarchy levels
+  | "property" | "building" | "floor" | "space"
+  // Specific venue types (original ENUM values)
+  | "meeting_room" | "outdoor" | "restaurant" | "spa" | "pool" | "lobby" | "ballroom" | "beach"
 export type GroupType = "MICE" | "incentive" | "wedding" | "retreat" | "buyout" | "conference"
 export type VisitStatus = "planning" | "scheduled" | "in_progress" | "completed" | "proposal_sent"
 

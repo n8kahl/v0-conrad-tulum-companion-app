@@ -27,6 +27,7 @@ const venueTypes = [
   { value: "property", label: "🏨 Property (Root)", hierarchy: true },
   { value: "building", label: "🏢 Building", hierarchy: true },
   { value: "floor", label: "📐 Floor", hierarchy: true },
+  { value: "space", label: "🗺️ Space (Generic)", hierarchy: true },
   { value: "meeting_room", label: "Meeting Room" },
   { value: "outdoor", label: "Outdoor" },
   { value: "restaurant", label: "Restaurant" },

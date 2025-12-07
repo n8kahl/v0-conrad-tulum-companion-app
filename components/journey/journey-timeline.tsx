@@ -26,6 +26,10 @@ import {
 
 // Venue type to icon mapping
 const venueTypeIcons: Record<VenueType, LucideIcon> = {
+  property: Hotel,
+  building: Building2,
+  floor: Building2,
+  space: MapPin,
   meeting_room: Building2,
   outdoor: TreePalm,
   restaurant: UtensilsCrossed,

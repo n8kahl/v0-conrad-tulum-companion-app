@@ -49,6 +49,10 @@ import type { VenueType } from "@/lib/supabase/types"
 
 // Venue type to icon mapping
 const venueTypeIcons: Record<VenueType, LucideIcon> = {
+  property: Hotel,
+  building: Building2,
+  floor: Building2,
+  space: MapPin,
   meeting_room: Building2,
   outdoor: TreePalm,
   restaurant: UtensilsCrossed,
@@ -61,6 +65,10 @@ const venueTypeIcons: Record<VenueType, LucideIcon> = {
 
 // Venue type descriptions for voice guidance
 const venueTypeDescriptions: Record<VenueType, string> = {
+  property: "the resort property showcasing the full destination",
+  building: "a building within the property complex",
+  floor: "a floor level with various spaces",
+  space: "a unique space within the property",
   meeting_room: "a professional meeting space perfect for conferences and presentations",
   outdoor: "a stunning outdoor venue surrounded by tropical gardens",
   restaurant: "an exceptional dining venue offering world-class cuisine",
