@@ -3,12 +3,21 @@ import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Playfair_Display } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { ThemeProvider } from "@/components/theme-provider"
 import { LanguageProvider } from "@/lib/contexts/language-context"
 import "./globals.css"
 
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
-const _playfair = Playfair_Display({
+const geistSans = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist-sans",
+})
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-geist-mono",
+})
+
+const playfair = Playfair_Display({
   subsets: ["latin"],
   variable: "--font-serif",
 })
@@ -50,10 +59,19 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`font-sans antialiased ${_playfair.variable}`}>
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} font-sans antialiased bg-background text-foreground`}
+      >
         <LanguageProvider>
-          {children}
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem={false}
+            disableTransitionOnChange
+          >
+            {children}
+          </ThemeProvider>
         </LanguageProvider>
         <Analytics />
       </body>
