@@ -7,6 +7,21 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import type { NewMediaFileType, MediaUploadFile, UploadState } from "@/lib/supabase/types"
 
+// Convert file type to accept attribute value
+function getAcceptString(types: NewMediaFileType[]): string {
+  const acceptMap: Record<NewMediaFileType, string> = {
+    image: "image/*,.jpg,.jpeg,.png,.gif,.webp,.svg",
+    pdf: ".pdf,application/pdf",
+    video: "video/*,.mp4,.mov,.webm",
+    audio: "audio/*,.mp3,.wav,.ogg,.webm",
+    document: ".pdf,.doc,.docx,.xls,.xlsx",
+    floorplan: "image/*,.pdf",
+    "360_tour": "image/*,video/*"
+  }
+  
+  return types.map(t => acceptMap[t] || "").filter(Boolean).join(",")
+}
+
 interface MediaUploadZoneProps {
   propertyId: string
   onUploadComplete?: (mediaIds: string[]) => void
@@ -268,7 +283,7 @@ export function MediaUploadZone({
           multiple
           className="hidden"
           onChange={handleFileInputChange}
-          accept={allowedTypes.map((t) => `.${t}`).join(",")}
+          accept={getAcceptString(allowedTypes)}
         />
       </div>
 
