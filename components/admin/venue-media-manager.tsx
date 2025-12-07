@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { MediaPicker } from "./media-picker"
+import { MediaUploadZone } from "./media-upload-zone"
 import type { VenueMediaLink, VenueMediaContext, MediaLibraryItem } from "@/lib/supabase/types"
 
 interface VenueMediaManagerProps {
@@ -69,6 +71,7 @@ export function VenueMediaManager({
   const [allMedia, setAllMedia] = useState<VenueMediaLink[]>(initialMedia)
   const [selectedContext, setSelectedContext] = useState<string>("hero")
   const [isPickerOpen, setIsPickerOpen] = useState(false)
+  const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [mediaItems, setMediaItems] = useState<Record<string, MediaLibraryItem>>({})
 
   // Fetch media details
@@ -123,6 +126,11 @@ export function VenueMediaManager({
     
     fetchMediaDetails(mediaIds)
     setIsPickerOpen(false)
+  }
+
+  const handleUploadComplete = (mediaIds: string[]) => {
+    handleAddMedia(mediaIds)
+    setIsUploadOpen(false)
   }
 
   const handleRemoveMedia = (linkId: string) => {
@@ -196,16 +204,28 @@ export function VenueMediaManager({
                   <h3 className="font-medium">{label}</h3>
                   <p className="text-sm text-gray-500">{description}</p>
                 </div>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setSelectedContext(key)
-                    setIsPickerOpen(true)
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add {label}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedContext(key)
+                      setIsUploadOpen(true)
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Upload New
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setSelectedContext(key)
+                      setIsPickerOpen(true)
+                    }}
+                  >
+                    Select from Library
+                  </Button>
+                </div>
               </div>
 
               {items.length === 0 ? (
@@ -251,6 +271,20 @@ export function VenueMediaManager({
         propertyId={propertyId}
         allowedTypes={CONTEXT_CONFIG[selectedContext]?.allowedTypes as any}
       />
+
+      <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Upload {CONTEXT_CONFIG[selectedContext]?.label}</DialogTitle>
+          </DialogHeader>
+          <MediaUploadZone
+            propertyId={propertyId}
+            onUploadComplete={handleUploadComplete}
+            allowedTypes={CONTEXT_CONFIG[selectedContext]?.allowedTypes as any}
+            maxFiles={selectedContext === "hero" ? 1 : 10}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
