@@ -651,8 +651,10 @@ export function TourMode({
       setCurrentIndex((i) => i + 1)
       setElapsedTime(0)
     } else {
+      // Tour complete - close tour mode
       setIsPlaying(false)
       toast.success("Tour complete!")
+      onClose()
     }
   }
 
