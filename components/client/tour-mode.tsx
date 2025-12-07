@@ -1,6 +1,6 @@
 "use client"
 
-import type { VisitStop, Venue, SiteVisit } from "@/lib/supabase/types"
+import type { VisitStop, Venue, SiteVisit, VisitCapture } from "@/lib/supabase/types"
 import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
@@ -10,6 +10,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { ReactionPicker } from "./reaction-picker"
+import { CaptureToolbar, type CaptureResult } from "./capture-toolbar"
+import { CameraCapture } from "./camera-capture"
+import { VoiceRecorder, type VoiceRecordingResult } from "./voice-recorder"
+import { CapturePreview, CaptureFullPreview } from "./capture-preview"
+import { useGeolocation } from "@/lib/hooks/use-geolocation"
 import {
   Play,
   Pause,
@@ -31,6 +36,8 @@ import {
   Hotel,
   Volume2,
   VolumeX,
+  Camera,
+  Mic,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -84,7 +91,16 @@ export function TourMode({
   const [reactions, setReactions] = useState<string[]>([])
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
+
+  // Capture state
+  const [showCamera, setShowCamera] = useState(false)
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false)
+  const [captures, setCaptures] = useState<VisitCapture[]>([])
+  const [previewCapture, setPreviewCapture] = useState<VisitCapture | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+
   const supabase = createClient()
+  const { getPosition } = useGeolocation()
 
   const currentStop = stops[currentIndex]
   const progress = ((currentIndex + 1) / stops.length) * 100
@@ -212,6 +228,295 @@ export function TourMode({
     setClientNotes(currentStop?.client_reaction || "")
     setReactions([])
   }, [currentIndex, currentStop])
+
+  // Load captures for current stop
+  useEffect(() => {
+    if (!currentStop) return
+
+    const loadCaptures = async () => {
+      try {
+        const response = await fetch(`/api/captures?visitStopId=${currentStop.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          setCaptures(data)
+        }
+      } catch (error) {
+        console.error("Failed to load captures:", error)
+      }
+    }
+
+    loadCaptures()
+  }, [currentStop])
+
+  // Handle capture toolbar actions
+  const handleCaptureStart = useCallback((type: CaptureResult["type"]) => {
+    if (type === "photo") {
+      setShowCamera(true)
+    } else if (type === "voice_note") {
+      setShowVoiceRecorder(true)
+    }
+  }, [])
+
+  // Handle photo capture
+  const handlePhotoCapture = useCallback(async (
+    file: File,
+    metadata: { capturedAt: Date; location?: { lat: number; lng: number }; venueId: string; venueName: string }
+  ) => {
+    if (!currentStop) return
+
+    setIsUploading(true)
+    try {
+      // Upload to Supabase Storage
+      const fileName = `tour-captures/${currentStop.id}/${Date.now()}-${file.name}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("media-library")
+        .upload(fileName, file)
+
+      if (uploadError) {
+        throw new Error("Failed to upload photo")
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("media-library")
+        .getPublicUrl(fileName)
+
+      // Create capture record
+      const response = await fetch("/api/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visitStopId: currentStop.id,
+          captureType: "photo",
+          storagePath: urlData.publicUrl,
+          location: metadata.location,
+          capturedBy: "sales",
+          propertyId: visit?.property_id,
+          fileName: file.name,
+          fileType: "image",
+          mimeType: file.type,
+          fileSize: file.size,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save capture")
+      }
+
+      const captureData = await response.json()
+
+      // Add to local state
+      const newCapture: VisitCapture = {
+        id: captureData.id,
+        visit_stop_id: currentStop.id,
+        media_id: captureData.mediaId,
+        capture_type: "photo",
+        caption: null,
+        transcript: null,
+        sentiment: null,
+        captured_at: new Date().toISOString(),
+        captured_by: "sales",
+        location: metadata.location || null,
+        created_at: new Date().toISOString(),
+        media: {
+          id: captureData.mediaId,
+          property_id: visit?.property_id || "",
+          file_name: file.name,
+          file_type: "image",
+          mime_type: file.type,
+          storage_path: urlData.publicUrl,
+          thumbnail_path: null,
+          file_size: file.size,
+          dimensions: {},
+          duration: null,
+          metadata: {},
+          tags: ["photo", "tour-capture"],
+          uploaded_by: null,
+          source: "capture",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      }
+
+      setCaptures(prev => [...prev, newCapture])
+      toast.success("Photo captured!")
+      setShowCamera(false)
+    } catch (error) {
+      console.error("Photo capture error:", error)
+      toast.error("Failed to capture photo")
+    } finally {
+      setIsUploading(false)
+    }
+  }, [currentStop, supabase, visit])
+
+  // Handle voice recording complete
+  const handleVoiceRecordingComplete = useCallback(async (result: VoiceRecordingResult) => {
+    if (!currentStop) return
+
+    setIsUploading(true)
+    try {
+      // Upload audio to storage
+      const fileName = `tour-captures/${currentStop.id}/${Date.now()}-voice-note.webm`
+      const { error: uploadError } = await supabase.storage
+        .from("media-library")
+        .upload(fileName, result.audioBlob)
+
+      if (uploadError) {
+        throw new Error("Failed to upload voice note")
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("media-library")
+        .getPublicUrl(fileName)
+
+      // Get transcription
+      let transcript: string | undefined
+      let sentiment: "positive" | "neutral" | "negative" | undefined
+
+      try {
+        const formData = new FormData()
+        formData.append("audio", result.audioBlob, "voice-note.webm")
+
+        const transcribeResponse = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (transcribeResponse.ok) {
+          const transcribeData = await transcribeResponse.json()
+          transcript = transcribeData.transcript
+          sentiment = transcribeData.sentiment
+        }
+      } catch {
+        console.log("Transcription not available")
+      }
+
+      // Create capture record
+      const response = await fetch("/api/captures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visitStopId: currentStop.id,
+          captureType: "voice_note",
+          storagePath: urlData.publicUrl,
+          transcript,
+          sentiment,
+          capturedBy: "sales",
+          propertyId: visit?.property_id,
+          fileName: "voice-note.webm",
+          fileType: "audio",
+          mimeType: "audio/webm",
+          fileSize: result.audioBlob.size,
+          duration: Math.round(result.duration),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save voice note")
+      }
+
+      const captureData = await response.json()
+
+      // Add to local state
+      const newCapture: VisitCapture = {
+        id: captureData.id,
+        visit_stop_id: currentStop.id,
+        media_id: captureData.mediaId,
+        capture_type: "voice_note",
+        caption: null,
+        transcript: transcript || null,
+        sentiment: sentiment || null,
+        captured_at: new Date().toISOString(),
+        captured_by: "sales",
+        location: null,
+        created_at: new Date().toISOString(),
+        media: {
+          id: captureData.mediaId,
+          property_id: visit?.property_id || "",
+          file_name: "voice-note.webm",
+          file_type: "audio",
+          mime_type: "audio/webm",
+          storage_path: urlData.publicUrl,
+          thumbnail_path: null,
+          file_size: result.audioBlob.size,
+          dimensions: {},
+          duration: Math.round(result.duration),
+          metadata: {},
+          tags: ["voice_note", "tour-capture"],
+          uploaded_by: null,
+          source: "capture",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      }
+
+      setCaptures(prev => [...prev, newCapture])
+      toast.success("Voice note saved!")
+      setShowVoiceRecorder(false)
+    } catch (error) {
+      console.error("Voice capture error:", error)
+      toast.error("Failed to save voice note")
+    } finally {
+      setIsUploading(false)
+    }
+  }, [currentStop, supabase, visit])
+
+  // Handle capture removal
+  const handleRemoveCapture = useCallback(async (captureId: string) => {
+    try {
+      const response = await fetch(`/api/captures/${captureId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setCaptures(prev => prev.filter(c => c.id !== captureId))
+        toast.success("Capture removed")
+      } else {
+        throw new Error("Failed to delete capture")
+      }
+    } catch (error) {
+      console.error("Delete capture error:", error)
+      toast.error("Failed to remove capture")
+    }
+  }, [])
+
+  // Handle quick reaction
+  const handleQuickReaction = useCallback(async (emoji: string) => {
+    if (!currentStop) return
+
+    // For now, just show a toast and add to reactions state
+    // In a full implementation, this would save to visit_annotations
+    toast.success(`Reaction added: ${emoji}`)
+    setReactions(prev => [...prev, emoji])
+  }, [currentStop])
+
+  // Handle quick note
+  const handleQuickNote = useCallback(async (content: string) => {
+    if (!currentStop) return
+
+    // Append to client notes
+    const updatedNotes = clientNotes
+      ? `${clientNotes}\n• ${content}`
+      : `• ${content}`
+
+    const { error } = await supabase
+      .from("visit_stops")
+      .update({ client_reaction: updatedNotes })
+      .eq("id", currentStop.id)
+
+    if (!error) {
+      setClientNotes(updatedNotes)
+      onStopUpdate(currentStop.id, { client_reaction: updatedNotes })
+      toast.success("Note added!")
+    }
+  }, [currentStop, clientNotes, supabase, onStopUpdate])
+
+  // Get location helper for camera capture
+  const getLocationForCapture = useCallback(async () => {
+    const position = await getPosition()
+    return position ? { lat: position.lat, lng: position.lng } : null
+  }, [getPosition])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -660,9 +965,36 @@ export function TourMode({
         </AnimatePresence>
       </main>
 
-      {/* Bottom Navigation */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-md border-t border-border p-4">
-        <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
+      {/* Capture Preview Strip */}
+      {captures.length > 0 && (
+        <div className="fixed top-[165px] left-0 right-0 z-30 px-4">
+          <CapturePreview
+            captures={captures}
+            onRemove={handleRemoveCapture}
+            onPreview={(capture) => setPreviewCapture(capture)}
+            compact
+            className="bg-white/90 backdrop-blur-sm rounded-xl p-2 shadow-lg"
+          />
+        </div>
+      )}
+
+      {/* Bottom Navigation & Capture Toolbar */}
+      <footer className="fixed bottom-0 left-0 right-0 bg-background/95 backdrop-blur-md border-t border-border pb-safe">
+        {/* Capture Toolbar */}
+        <div className="flex justify-center py-3 border-b border-border/50">
+          <CaptureToolbar
+            visitStopId={currentStop.id}
+            venueId={currentStop.venue.id}
+            venueName={currentStop.venue.name}
+            onCaptureStart={handleCaptureStart}
+            onReaction={handleQuickReaction}
+            onNote={handleQuickNote}
+            disabled={isUploading}
+          />
+        </div>
+
+        {/* Navigation */}
+        <div className="flex items-center justify-between gap-3 max-w-lg mx-auto p-4">
           <Button
             variant="outline"
             onClick={handlePrevious}
@@ -710,6 +1042,36 @@ export function TourMode({
           </Button>
         </div>
       </footer>
+
+      {/* Camera Capture Modal */}
+      <CameraCapture
+        isOpen={showCamera}
+        onClose={() => setShowCamera(false)}
+        onCapture={handlePhotoCapture}
+        venueId={currentStop.venue.id}
+        venueName={currentStop.venue.name}
+        getLocation={getLocationForCapture}
+      />
+
+      {/* Voice Recorder Modal */}
+      <VoiceRecorder
+        isOpen={showVoiceRecorder}
+        onClose={() => setShowVoiceRecorder(false)}
+        onRecordingComplete={handleVoiceRecordingComplete}
+        venueId={currentStop.venue.id}
+        venueName={currentStop.venue.name}
+      />
+
+      {/* Capture Full Preview */}
+      {previewCapture && (
+        <CaptureFullPreview
+          captures={captures}
+          initialIndex={captures.findIndex(c => c.id === previewCapture.id)}
+          isOpen={true}
+          onClose={() => setPreviewCapture(null)}
+          onRemove={handleRemoveCapture}
+        />
+      )}
     </div>
   )
 }

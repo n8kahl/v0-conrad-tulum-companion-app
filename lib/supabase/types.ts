@@ -149,3 +149,109 @@ export interface Profile {
   created_at: string
   updated_at: string
 }
+
+// ============================================
+// Phase 1: Media Library Types
+// ============================================
+
+export type MediaFileType = "image" | "video" | "audio" | "document"
+export type MediaSource = "upload" | "capture" | "ai_generated"
+export type CaptureType = "photo" | "voice_note" | "video"
+export type Sentiment = "positive" | "neutral" | "negative"
+export type AnnotationType = "reaction" | "question" | "concern" | "highlight" | "note"
+export type MediaContext = "hero" | "gallery" | "floorplan" | "menu" | "capacity_chart"
+export type CapturedBy = "sales" | "client"
+
+export interface MediaLibrary {
+  id: string
+  property_id: string
+  file_name: string
+  file_type: MediaFileType
+  mime_type: string
+  storage_path: string
+  thumbnail_path: string | null
+  file_size: number | null
+  dimensions: {
+    width?: number
+    height?: number
+  }
+  duration: number | null
+  metadata: Record<string, unknown>
+  tags: string[]
+  uploaded_by: string | null
+  source: MediaSource
+  created_at: string
+  updated_at: string
+}
+
+export interface VenueMedia {
+  id: string
+  venue_id: string
+  media_id: string
+  is_primary: boolean
+  display_order: number
+  context: MediaContext
+  created_at: string
+  media?: MediaLibrary
+}
+
+export interface VisitCapture {
+  id: string
+  visit_stop_id: string
+  media_id: string
+  capture_type: CaptureType
+  caption: string | null
+  transcript: string | null
+  sentiment: Sentiment | null
+  captured_at: string
+  captured_by: CapturedBy
+  location: {
+    lat: number
+    lng: number
+  } | null
+  created_at: string
+  media?: MediaLibrary
+}
+
+export interface VisitAnnotation {
+  id: string
+  visit_stop_id: string
+  annotation_type: AnnotationType
+  content: string | null
+  emoji: string | null
+  priority: number
+  created_by: CapturedBy
+  created_at: string
+}
+
+export interface RecapDraft {
+  id: string
+  site_visit_id: string
+  version: number
+  ai_summary: string | null
+  key_highlights: {
+    venueId: string
+    venueName: string
+    sentiment: Sentiment
+    keyPoints: string[]
+    clientQuotes: string[]
+  }[]
+  recommended_next_steps: string[]
+  proposal_talking_points: string[]
+  concerns: string[]
+  generated_at: string
+  approved: boolean
+  approved_by: string | null
+  approved_at: string | null
+  created_at: string
+}
+
+// Extended VisitStop with Phase 1 fields
+export interface VisitStopExtended extends VisitStop {
+  time_spent_seconds: number
+  engagement_score: number
+  ai_sentiment: Sentiment | null
+  follow_up_required: boolean
+  captures?: VisitCapture[]
+  annotations?: VisitAnnotation[]
+}
