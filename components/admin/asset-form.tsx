@@ -22,6 +22,7 @@ import { toast } from "sonner"
 import Link from "next/link"
 import { AssetMediaManager } from "./asset-media-manager"
 import { MediaUploadZone } from "./media-upload-zone"
+import { ImageUploadField } from "./image-upload-field"
 import type { AssetMediaLink, MediaLibraryItem } from "@/lib/supabase/types"
 
 const assetTypes = [
@@ -99,6 +100,9 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
   const [linkPreview, setLinkPreview] = useState<{ title: string; description?: string; image?: string } | null>(null)
   const [derivedUrls, setDerivedUrls] = useState<Record<string, string>>({})
   const [derivedThumbnailUrl, setDerivedThumbnailUrl] = useState<string | null>(null)
+  
+  // Manual thumbnail override
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>("")
   const [isLoadingPreview, setIsLoadingPreview] = useState(false)
 
   // Fetch media links if editing
@@ -129,6 +133,13 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
   const [sortOrder, setSortOrder] = useState(asset?.sort_order || 0)
   const [isActive, setIsActive] = useState(asset?.is_active ?? true)
   const [isFeatured, setIsFeatured] = useState(asset?.is_featured ?? false)
+  
+  // Initialize thumbnail from asset
+  useEffect(() => {
+    if (asset?.thumbnail_url) {
+      setThumbnailUrl(asset.thumbnail_url)
+    }
+  }, [asset?.thumbnail_url])
 
   const toggleTag = (tag: string) => {
     setTags((prev) =>
@@ -286,7 +297,7 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
         language,
         description: description || null,
         urls: derivedUrls, // From link preview or upload
-        thumbnail_url: derivedThumbnailUrl, // From link preview OG image
+        thumbnail_url: thumbnailUrl || derivedThumbnailUrl || null, // Manual override, fallback to derived OG image
         tags,
         sort_order: sortOrder,
         is_active: isActive,
@@ -584,6 +595,33 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
                 </Label>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Thumbnail */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Thumbnail Image</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ImageUploadField
+              propertyId={propertyId}
+              label="Asset Thumbnail"
+              value={thumbnailUrl}
+              onUpload={(mediaId, url) => setThumbnailUrl(url)}
+              onRemove={() => setThumbnailUrl("")}
+              aspectRatio="16/9"
+              compact
+              helpText={derivedThumbnailUrl ? "Override auto-detected thumbnail from link/file" : "Asset preview image for browse pages"}
+            />
+            {derivedThumbnailUrl && !thumbnailUrl && (
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                <p className="text-xs text-muted-foreground">
+                  📷 Auto-detected from {linkPreview ? "link preview" : "uploaded file"}
+                </p>
+                <img src={derivedThumbnailUrl} alt="Auto thumbnail" className="mt-2 w-full rounded border" />
+              </div>
+            )}
           </CardContent>
         </Card>
 
