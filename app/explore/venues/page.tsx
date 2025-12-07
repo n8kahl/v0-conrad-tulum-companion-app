@@ -26,12 +26,17 @@ function getHeroImageUrl(venue: any): string | null {
   
   const media = heroMedia?.media
   
-  return (
-    toUrl(media?.thumbnail_path) ??
-    toUrl(media?.storage_path) ??
-    venue.images?.[0] ??
-    null
-  )
+  // Try new media library system first
+  const newSystemUrl = toUrl(media?.thumbnail_path) ?? toUrl(media?.storage_path)
+  if (newSystemUrl) return newSystemUrl
+  
+  // Fallback to legacy images field
+  const legacyImage = venue.images?.[0]
+  if (!legacyImage) return null
+  
+  // Legacy images were stored as URLs or paths
+  if (legacyImage.startsWith("http")) return legacyImage
+  return null // Invalid legacy format
 }
 
 export default async function PublicVenuesPage() {

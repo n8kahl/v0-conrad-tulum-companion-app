@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, X, Plus, Save, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -650,6 +651,16 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
             <div className="mb-4 text-sm text-muted-foreground">
               Configure hero photos, galleries, and floorplans. These will be used on admin and client pages.
             </div>
+            
+            {venue?.images && venue.images.length > 0 && mediaLinks.length === 0 && (
+              <Alert className="mb-4">
+                <AlertDescription>
+                  ⚠️ This venue has {venue.images.length} legacy image(s) that need migration. 
+                  Upload new images using "Upload New" or "Select from Library" buttons below to replace them.
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <VenueMediaManager
               venueId={venue?.id ?? "new-venue"}
               propertyId={propertyId}
