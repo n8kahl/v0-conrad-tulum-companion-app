@@ -11,17 +11,40 @@ interface VenueHighlightCardProps {
   index: number
 }
 
+// Helper to get hero image URL from venue media or fallback to legacy field
+function getHeroImageUrl(venue: any): string | null {
+  const heroMedia = venue.venue_media?.find(
+    (vm: any) => vm.context === "hero" && vm.is_primary
+  ) ?? venue.venue_media?.find(
+    (vm: any) => vm.context === "hero"
+  )
+  
+  const media = heroMedia?.media
+  
+  if (media?.thumbnail_path) {
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.thumbnail_path}`
+  }
+  
+  if (media?.storage_path) {
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.storage_path}`
+  }
+  
+  // Fallback to legacy field
+  return venue.images?.[0] || null
+}
+
 export function VenueHighlightCard({ stop, index }: VenueHighlightCardProps) {
   const venue = stop.venue
+  const heroImageUrl = getHeroImageUrl(venue)
 
   return (
     <Card className="overflow-hidden print:break-inside-avoid">
       <div className="relative">
         {/* Image Gallery */}
         <div className="relative aspect-[16/9] bg-muted">
-          {venue.images?.[0] ? (
+          {heroImageUrl ? (
             <Image
-              src={venue.images[0]}
+              src={heroImageUrl}
               alt={venue.name}
               fill
               className="object-cover"

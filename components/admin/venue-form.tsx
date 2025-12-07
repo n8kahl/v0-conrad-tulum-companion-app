@@ -160,8 +160,8 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
           sqm: dimensions.sqm || dimensions.length_m * dimensions.width_m,
         },
         features,
-        images: [], // Legacy field
-        floorplan_url: null, // Legacy field
+        images: [], // Legacy field - kept for backward compatibility, new media system is source of truth
+        floorplan_url: null, // Legacy field - kept for backward compatibility, new media system is source of truth
         map_coordinates: mapCoordinates,
         is_active: isActive,
         updated_at: new Date().toISOString(),
@@ -492,18 +492,15 @@ export function VenueForm({ venue, propertyId, mode }: VenueFormProps) {
             <CardTitle className="text-lg">Media & Assets</CardTitle>
           </CardHeader>
           <CardContent>
-            {mode === "create" ? (
-              <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
-                <p>Save the venue first to add media and assets.</p>
-              </div>
-            ) : (
-              <VenueMediaManager
-                venueId={venue!.id}
-                propertyId={propertyId}
-                initialMedia={mediaLinks}
-                onChange={setMediaLinks}
-              />
-            )}
+            <div className="mb-4 text-sm text-muted-foreground">
+              Configure hero photos, galleries, and floorplans. These will be used on admin and client pages.
+            </div>
+            <VenueMediaManager
+              venueId={venue?.id ?? "new-venue"}
+              propertyId={propertyId}
+              initialMedia={mediaLinks}
+              onChange={setMediaLinks}
+            />
           </CardContent>
         </Card>
       </div>

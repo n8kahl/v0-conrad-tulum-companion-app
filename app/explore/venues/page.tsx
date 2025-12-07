@@ -6,12 +6,50 @@ import { MapPin, Users } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 
+// Helper to get hero image URL from venue media or fallback to legacy field
+function getHeroImageUrl(venue: any): string | null {
+  const heroMedia = venue.venue_media?.find(
+    (vm: any) => vm.context === "hero" && vm.show_on_public && vm.is_primary
+  ) ?? venue.venue_media?.find(
+    (vm: any) => vm.context === "hero" && vm.show_on_public
+  ) ?? venue.venue_media?.find(
+    (vm: any) => vm.context === "hero"
+  )
+  
+  const media = heroMedia?.media
+  
+  if (media?.thumbnail_path) {
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.thumbnail_path}`
+  }
+  
+  if (media?.storage_path) {
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.storage_path}`
+  }
+  
+  // Fallback to legacy field
+  return venue.images?.[0] || null
+}
+
 export default async function PublicVenuesPage() {
   const supabase = await createClient()
 
   const { data: venues } = await supabase
     .from("venues")
-    .select("*")
+    .select(`
+      *,
+      venue_media(
+        id,
+        context,
+        is_primary,
+        display_order,
+        show_on_public,
+        media:media_library(
+          storage_path,
+          thumbnail_path,
+          alt_text
+        )
+      )
+    `)
     .eq("is_active", true)
     .order("name", { ascending: true })
 
@@ -40,9 +78,9 @@ export default async function PublicVenuesPage() {
                 <Card className="group overflow-hidden transition-all hover:shadow-lg hover:border-primary/20 h-full">
                   {/* Image */}
                   <div className="relative aspect-[16/10] bg-muted overflow-hidden">
-                    {venue.images && venue.images[0] ? (
+                    {getHeroImageUrl(venue) ? (
                       <Image
-                        src={venue.images[0] || "/placeholder.svg"}
+                        src={getHeroImageUrl(venue)!}
                         alt={venue.name}
                         fill
                         className="object-cover transition-transform duration-500 group-hover:scale-105"

@@ -13,13 +13,97 @@ interface VenuePageProps {
   params: Promise<{ id: string }>
 }
 
+// Helper to get hero image from venue media or fallback to legacy field
+function getHeroImage(venue: any) {
+  const links = venue.venue_media ?? []
+  const heroLink =
+    links.find((vm: any) => vm.context === "hero" && vm.show_on_public && vm.is_primary) ??
+    links.find((vm: any) => vm.context === "hero" && vm.show_on_public) ??
+    links.find((vm: any) => vm.context === "hero")
+
+  const media = heroLink?.media
+
+  if (media?.thumbnail_path) {
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.thumbnail_path}`
+  }
+
+  if (media?.storage_path) {
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${media.storage_path}`
+  }
+
+  return venue.images?.[0] ?? null
+}
+
+// Helper to get gallery images from venue media or fallback to legacy field
+function getGalleryImages(venue: any) {
+  const links = (venue.venue_media ?? []).filter(
+    (vm: any) => vm.context === "gallery" && vm.show_on_public && vm.media
+  )
+
+  // Sort by display_order then id for stability
+  links.sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0))
+
+  const galleryImages = links.map((vm: any) => {
+    const media = vm.media
+    const path = media?.thumbnail_path || media?.storage_path
+    if (!path) return null
+
+    return {
+      id: vm.id,
+      url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`,
+      alt: media.alt_text || venue.name,
+    }
+  }).filter(Boolean)
+
+  // Fallback to legacy images if no gallery media
+  if (galleryImages.length === 0 && venue.images && venue.images.length > 1) {
+    return venue.images.slice(1, 7).map((img: string, idx: number) => ({
+      id: `legacy-${idx}`,
+      url: img,
+      alt: `${venue.name} ${idx + 2}`,
+    }))
+  }
+
+  return galleryImages
+}
+
+// Helper to get floorplan URL from venue media or fallback to legacy field
+function getFloorplanUrl(venue: any): string | null {
+  const floorplanLink = (venue.venue_media ?? []).find(
+    (vm: any) => vm.context === "floorplan" && vm.media
+  )
+
+  if (floorplanLink?.media?.storage_path) {
+    return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${floorplanLink.media.storage_path}`
+  }
+
+  return venue.floorplan_url || null
+}
+
 export default async function VenueDetailPage({ params }: VenuePageProps) {
   const { id } = await params
   const supabase = await createClient()
 
   const { data: venue, error } = await supabase
     .from("venues")
-    .select("*")
+    .select(`
+      *,
+      venue_media(
+        id,
+        context,
+        is_primary,
+        display_order,
+        show_on_public,
+        show_on_tour,
+        caption,
+        media:media_library(
+          storage_path,
+          thumbnail_path,
+          alt_text,
+          file_type
+        )
+      )
+    `)
     .eq("id", id)
     .single()
 
@@ -42,9 +126,10 @@ export default async function VenueDetailPage({ params }: VenuePageProps) {
     networking: "Networking",
   }
 
-  // Check if venue has a hero image for immersive viewing
-  const heroImage = venue.images?.[0]
-  const hasMultipleImages = venue.images && venue.images.length > 1
+  // Get media using helper functions
+  const heroImage = getHeroImage(venue)
+  const galleryImages = getGalleryImages(venue)
+  const floorplanUrl = getFloorplanUrl(venue)
 
   return (
     <div className="min-h-svh bg-background">
@@ -72,17 +157,17 @@ export default async function VenueDetailPage({ params }: VenuePageProps) {
       )}
 
       {/* Secondary Images Gallery */}
-      {hasMultipleImages && (
+      {galleryImages.length > 0 && (
         <section className="px-6 pb-4 max-w-6xl mx-auto">
           <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-            {venue.images.slice(1, 7).map((img: string, idx: number) => (
+            {galleryImages.slice(0, 6).map((img: any) => (
               <div
-                key={idx}
+                key={img.id}
                 className="relative aspect-square bg-muted rounded-lg overflow-hidden group cursor-pointer"
               >
                 <Image
-                  src={img}
-                  alt={`${venue.name} ${idx + 2}`}
+                  src={img.url}
+                  alt={img.alt}
                   fill
                   className="object-cover transition-transform group-hover:scale-105"
                 />
@@ -130,9 +215,9 @@ export default async function VenueDetailPage({ params }: VenuePageProps) {
             )}
 
             {/* Floorplan */}
-            {venue.floorplan_url && (
+            {floorplanUrl && (
               <Button asChild className="w-full">
-                <a href={venue.floorplan_url} target="_blank" rel="noopener noreferrer">
+                <a href={floorplanUrl} target="_blank" rel="noopener noreferrer">
                   View Floorplan
                 </a>
               </Button>
