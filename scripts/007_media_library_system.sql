@@ -6,9 +6,23 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ================================================================
--- ENUMS
+-- ENUMS - Drop and recreate to ensure clean state
 -- ================================================================
 
+-- Drop existing tables first to break dependencies
+DROP TABLE IF EXISTS media_collection_items CASCADE;
+DROP TABLE IF EXISTS media_collections CASCADE;
+DROP TABLE IF EXISTS pdf_extractions CASCADE;
+DROP TABLE IF EXISTS asset_media CASCADE;
+DROP TABLE IF EXISTS venue_media CASCADE;
+DROP TABLE IF EXISTS media_library CASCADE;
+
+-- Now drop types
+DROP TYPE IF EXISTS media_file_type CASCADE;
+DROP TYPE IF EXISTS media_status CASCADE;
+DROP TYPE IF EXISTS venue_media_context CASCADE;
+
+-- Recreate types
 CREATE TYPE media_file_type AS ENUM (
   'image', 'video', 'pdf', 'document', 'audio', 'floorplan', '360_tour'
 );
@@ -37,7 +51,7 @@ CREATE TYPE venue_media_context AS ENUM (
 -- TABLE: media_library
 -- Central repository for ALL uploaded files
 -- ================================================================
-CREATE TABLE IF NOT EXISTS media_library (
+CREATE TABLE media_library (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
   
@@ -94,21 +108,11 @@ CREATE INDEX IF NOT EXISTS idx_media_library_tags ON media_library USING GIN(ai_
 CREATE INDEX IF NOT EXISTS idx_media_library_custom_tags ON media_library USING GIN(custom_tags);
 CREATE INDEX IF NOT EXISTS idx_media_library_uploaded_by ON media_library(uploaded_by);
 
--- Full-text search index
-CREATE INDEX IF NOT EXISTS idx_media_library_search 
-  ON media_library USING gin(to_tsvector('english', 
-    COALESCE(title, '') || ' ' || 
-    COALESCE(description, '') || ' ' || 
-    COALESCE(searchable_text, '') || ' ' ||
-    COALESCE(array_to_string(ai_tags, ' '), '') || ' ' ||
-    COALESCE(array_to_string(custom_tags, ' '), '')
-  ));
-
 -- ================================================================
 -- TABLE: venue_media
 -- Links media to venues with context
 -- ================================================================
-CREATE TABLE IF NOT EXISTS venue_media (
+CREATE TABLE venue_media (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   venue_id UUID NOT NULL REFERENCES venues(id) ON DELETE CASCADE,
   media_id UUID NOT NULL REFERENCES media_library(id) ON DELETE CASCADE,
@@ -146,7 +150,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_venue_media_primary_context
 -- TABLE: asset_media
 -- Links media to sales assets (versioned)
 -- ================================================================
-CREATE TABLE IF NOT EXISTS asset_media (
+CREATE TABLE asset_media (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
   media_id UUID NOT NULL REFERENCES media_library(id) ON DELETE CASCADE,
@@ -174,7 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_asset_media_current ON asset_media(asset_id, is_c
 -- TABLE: pdf_extractions
 -- Structured data extracted from PDFs
 -- ================================================================
-CREATE TABLE IF NOT EXISTS pdf_extractions (
+CREATE TABLE pdf_extractions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   media_id UUID NOT NULL REFERENCES media_library(id) ON DELETE CASCADE,
   
@@ -203,7 +207,7 @@ CREATE INDEX IF NOT EXISTS idx_pdf_extractions_content_type ON pdf_extractions(c
 -- TABLE: media_collections
 -- Group media for easy access (optional feature)
 -- ================================================================
-CREATE TABLE IF NOT EXISTS media_collections (
+CREATE TABLE media_collections (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   property_id UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
   
@@ -219,7 +223,7 @@ CREATE TABLE IF NOT EXISTS media_collections (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS media_collection_items (
+CREATE TABLE media_collection_items (
   collection_id UUID NOT NULL REFERENCES media_collections(id) ON DELETE CASCADE,
   media_id UUID NOT NULL REFERENCES media_library(id) ON DELETE CASCADE,
   display_order INTEGER DEFAULT 0,
@@ -289,21 +293,25 @@ END $$;
 -- media_library: Public read for ready media, authenticated write
 ALTER TABLE media_library ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Media library public read for ready media" ON media_library;
 CREATE POLICY "Media library public read for ready media"
   ON media_library FOR SELECT
   TO public
-  USING (status = 'ready');
+  USING (status::text = 'ready'::text);
 
+DROP POLICY IF EXISTS "Media library authenticated users can insert" ON media_library;
 CREATE POLICY "Media library authenticated users can insert"
   ON media_library FOR INSERT
   TO authenticated
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Media library authenticated users can update own" ON media_library;
 CREATE POLICY "Media library authenticated users can update own"
   ON media_library FOR UPDATE
   TO authenticated
   USING (uploaded_by = auth.uid() OR uploaded_by IS NULL);
 
+DROP POLICY IF EXISTS "Media library authenticated users can delete own" ON media_library;
 CREATE POLICY "Media library authenticated users can delete own"
   ON media_library FOR DELETE
   TO authenticated
@@ -312,11 +320,13 @@ CREATE POLICY "Media library authenticated users can delete own"
 -- venue_media: Public read, authenticated write
 ALTER TABLE venue_media ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Venue media public read" ON venue_media;
 CREATE POLICY "Venue media public read"
   ON venue_media FOR SELECT
   TO public
   USING (show_on_public = true);
 
+DROP POLICY IF EXISTS "Venue media authenticated write" ON venue_media;
 CREATE POLICY "Venue media authenticated write"
   ON venue_media FOR ALL
   TO authenticated
@@ -326,11 +336,13 @@ CREATE POLICY "Venue media authenticated write"
 -- asset_media: Public read, authenticated write
 ALTER TABLE asset_media ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Asset media public read" ON asset_media;
 CREATE POLICY "Asset media public read"
   ON asset_media FOR SELECT
   TO public
   USING (true);
 
+DROP POLICY IF EXISTS "Asset media authenticated write" ON asset_media;
 CREATE POLICY "Asset media authenticated write"
   ON asset_media FOR ALL
   TO authenticated
@@ -340,11 +352,13 @@ CREATE POLICY "Asset media authenticated write"
 -- pdf_extractions: Public read, authenticated write
 ALTER TABLE pdf_extractions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "PDF extractions public read" ON pdf_extractions;
 CREATE POLICY "PDF extractions public read"
   ON pdf_extractions FOR SELECT
   TO public
   USING (true);
 
+DROP POLICY IF EXISTS "PDF extractions authenticated write" ON pdf_extractions;
 CREATE POLICY "PDF extractions authenticated write"
   ON pdf_extractions FOR ALL
   TO authenticated
@@ -355,22 +369,26 @@ CREATE POLICY "PDF extractions authenticated write"
 ALTER TABLE media_collections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE media_collection_items ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Media collections public read" ON media_collections;
 CREATE POLICY "Media collections public read"
   ON media_collections FOR SELECT
   TO public
   USING (true);
 
+DROP POLICY IF EXISTS "Media collections authenticated write" ON media_collections;
 CREATE POLICY "Media collections authenticated write"
   ON media_collections FOR ALL
   TO authenticated
   USING (true)
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Media collection items public read" ON media_collection_items;
 CREATE POLICY "Media collection items public read"
   ON media_collection_items FOR SELECT
   TO public
   USING (true);
 
+DROP POLICY IF EXISTS "Media collection items authenticated write" ON media_collection_items;
 CREATE POLICY "Media collection items authenticated write"
   ON media_collection_items FOR ALL
   TO authenticated
@@ -429,14 +447,14 @@ BEGIN
   SELECT 
     v.id as venue_id,
     m.id as media_id,
-    CASE WHEN ordinality = 1 THEN 'hero'::venue_media_context ELSE 'gallery'::venue_media_context END as context,
-    ordinality as display_order,
-    ordinality = 1 as is_primary,
+    CASE WHEN t.ordinality = 1 THEN 'hero'::venue_media_context ELSE 'gallery'::venue_media_context END as context,
+    t.ordinality as display_order,
+    t.ordinality = 1 as is_primary,
     true as show_on_tour,
     true as show_on_public
-  FROM venues v,
-  LATERAL unnest(v.images) WITH ORDINALITY AS t(url, ordinality)
-  JOIN media_library m ON m.storage_path = url AND m.property_id = v.property_id
+  FROM venues v
+  CROSS JOIN LATERAL unnest(v.images) WITH ORDINALITY AS t(url, ordinality)
+  INNER JOIN media_library m ON m.storage_path = t.url AND m.property_id = v.property_id
   WHERE array_length(v.images, 1) > 0
   ON CONFLICT DO NOTHING;
   
@@ -509,27 +527,27 @@ BEGIN
   )
   SELECT DISTINCT
     a.property_id,
-    SPLIT_PART(SPLIT_PART(url_value, '/', -1), '?', 1),
+    SPLIT_PART(SPLIT_PART(t.url_value, '/', -1), '?', 1),
     CASE 
-      WHEN url_key = 'pdf' THEN 'pdf'::media_file_type
-      WHEN url_key LIKE 'flipbook%' THEN 'pdf'::media_file_type
-      WHEN url_key = 'video' THEN 'video'::media_file_type
-      WHEN url_key = 'virtual_tour' THEN '360_tour'::media_file_type
+      WHEN t.url_key = 'pdf' THEN 'pdf'::media_file_type
+      WHEN t.url_key LIKE 'flipbook%' THEN 'pdf'::media_file_type
+      WHEN t.url_key = 'video' THEN 'video'::media_file_type
+      WHEN t.url_key = 'virtual_tour' THEN '360_tour'::media_file_type
       ELSE 'document'::media_file_type
     END,
     CASE 
-      WHEN url_key = 'pdf' OR url_key LIKE 'flipbook%' THEN 'application/pdf'
-      WHEN url_key = 'video' THEN 'video/mp4'
+      WHEN t.url_key = 'pdf' OR t.url_key LIKE 'flipbook%' THEN 'application/pdf'
+      WHEN t.url_key = 'video' THEN 'video/mp4'
       ELSE 'application/octet-stream'
     END,
     0,
-    url_value,
+    t.url_value,
     'ready'::media_status,
     'migration',
-    a.name || ' - ' || UPPER(url_key)
-  FROM assets a,
-  LATERAL jsonb_each_text(a.urls) AS t(url_key, url_value)
-  WHERE url_value IS NOT NULL AND url_value != ''
+    a.name || ' - ' || UPPER(t.url_key)
+  FROM assets a
+  CROSS JOIN LATERAL jsonb_each_text(a.urls) AS t(url_key, url_value)
+  WHERE t.url_value IS NOT NULL AND t.url_value != ''
   ON CONFLICT DO NOTHING;
   
   -- Link migrated assets to assets table
@@ -537,17 +555,17 @@ BEGIN
   SELECT 
     a.id,
     m.id,
-    url_key,
+    t.url_key,
     CASE 
-      WHEN url_key LIKE '%_en' THEN 'en'
-      WHEN url_key LIKE '%_es' THEN 'es'
+      WHEN t.url_key LIKE '%_en' THEN 'en'
+      WHEN t.url_key LIKE '%_es' THEN 'es'
       ELSE 'en'
     END,
     true
-  FROM assets a,
-  LATERAL jsonb_each_text(a.urls) AS t(url_key, url_value)
-  JOIN media_library m ON m.storage_path = url_value AND m.property_id = a.property_id
-  WHERE url_value IS NOT NULL AND url_value != ''
+  FROM assets a
+  CROSS JOIN LATERAL jsonb_each_text(a.urls) AS t(url_key, url_value)
+  INNER JOIN media_library m ON m.storage_path = t.url_value AND m.property_id = a.property_id
+  WHERE t.url_value IS NOT NULL AND t.url_value != ''
   ON CONFLICT DO NOTHING;
   
   RAISE NOTICE 'Migrated asset media';

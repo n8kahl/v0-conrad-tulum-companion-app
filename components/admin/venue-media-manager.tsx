@@ -197,6 +197,7 @@ export function VenueMediaManager({
                   <p className="text-sm text-gray-500">{description}</p>
                 </div>
                 <Button
+                  type="button"
                   onClick={() => {
                     setSelectedContext(key)
                     setIsPickerOpen(true)
@@ -335,6 +336,7 @@ function SortableMediaItem({ link, mediaItem, context, onRemove, onSetPrimary }:
       <div className="flex items-center gap-2">
         {!link.is_primary && context === "hero" && (
           <Button
+            type="button"
             variant="outline"
             size="sm"
             onClick={onSetPrimary}
@@ -343,6 +345,7 @@ function SortableMediaItem({ link, mediaItem, context, onRemove, onSetPrimary }:
           </Button>
         )}
         <Button
+          type="button"
           variant="ghost"
           size="icon"
           onClick={onRemove}

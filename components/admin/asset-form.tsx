@@ -15,12 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, X, Plus, Save, ArrowLeft } from "lucide-react"
+import { Loader2, X, Plus, Save, ArrowLeft, Upload as UploadIcon, Link as LinkIcon, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { AssetMediaManager } from "./asset-media-manager"
-import type { AssetMediaLink } from "@/lib/supabase/types"
+import { MediaUploadZone } from "./media-upload-zone"
+import type { AssetMediaLink, MediaLibraryItem } from "@/lib/supabase/types"
 
 const assetTypes = [
   { value: "pdf", label: "PDF" },
@@ -92,6 +94,13 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [mediaLinks, setMediaLinks] = useState<AssetMediaLink[]>([])
 
+  // Source card state (upload/link)
+  const [sourceUrl, setSourceUrl] = useState("")
+  const [linkPreview, setLinkPreview] = useState<{ title: string; description?: string; image?: string } | null>(null)
+  const [derivedUrls, setDerivedUrls] = useState<Record<string, string>>({})
+  const [derivedThumbnailUrl, setDerivedThumbnailUrl] = useState<string | null>(null)
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+
   // Fetch media links if editing
   useEffect(() => {
     if (asset?.id) {
@@ -138,6 +147,132 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
     setTags((prev) => prev.filter((t) => t !== tag))
   }
 
+  const handlePrimaryUploadComplete = async (mediaIds: string[]) => {
+    if (mediaIds.length === 0) return
+
+    const mediaId = mediaIds[0]
+
+    try {
+      // Fetch media metadata
+      const response = await fetch(`/api/media/${mediaId}`)
+      if (!response.ok) throw new Error("Failed to fetch media")
+
+      const media: MediaLibraryItem = await response.json()
+
+      // Auto-fill asset name from filename if empty
+      if (!name.trim() && media.original_filename) {
+        const cleanName = media.original_filename
+          .replace(/\.[^/.]+$/, "") // Remove extension
+          .replace(/[_-]/g, " ") // Replace _ and - with spaces
+          .split(" ")
+          .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(" ")
+        setName(cleanName)
+      }
+
+      // Auto-infer asset type from mime_type/file_type
+      if (!assetType || assetType === "flipbook") {
+        if (media.mime_type?.includes("pdf") || media.file_type === "pdf") {
+          setAssetType("pdf")
+        } else if (media.mime_type?.startsWith("image/") || media.file_type === "image") {
+          setAssetType("image")
+        } else if (media.mime_type?.startsWith("video/") || media.file_type === "video") {
+          setAssetType("video")
+        }
+      }
+
+      // Merge tags from media
+      if (media.ai_tags?.length || media.custom_tags?.length) {
+        const allMediaTags = [...(media.ai_tags || []), ...(media.custom_tags || [])]
+        setTags((prev) => Array.from(new Set([...prev, ...allMediaTags])))
+      }
+
+      // Create AssetMediaLink entries
+      const newLinks: AssetMediaLink[] = [
+        {
+          id: crypto.randomUUID(),
+          asset_id: asset?.id || "new-asset",
+          media_id: mediaId,
+          role: "primary",
+          language: language || "en",
+          version: 1,
+          is_current: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ]
+
+      // Add thumbnail link if available
+      if (media.thumbnail_path) {
+        newLinks.push({
+          id: crypto.randomUUID(),
+          asset_id: asset?.id || "new-asset",
+          media_id: mediaId,
+          role: "thumbnail",
+          language: language || "en",
+          version: 1,
+          is_current: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+      }
+
+      setMediaLinks((prev) => [...prev, ...newLinks])
+      toast.success("File uploaded and attached!")
+    } catch (error) {
+      console.error("Error processing upload:", error)
+      toast.error("File uploaded but metadata extraction failed")
+    }
+  }
+
+  const handleLinkPreview = async () => {
+    if (!sourceUrl.trim()) {
+      toast.error("Please enter a URL")
+      return
+    }
+
+    setIsLoadingPreview(true)
+
+    try {
+      const response = await fetch(`/api/link-preview?url=${encodeURIComponent(sourceUrl)}`)
+      if (!response.ok) throw new Error("Failed to fetch preview")
+
+      const preview = await response.json()
+      setLinkPreview(preview)
+
+      // Auto-fill asset name from link title if empty
+      if (!name.trim() && preview.title) {
+        setName(preview.title)
+      }
+
+      // Infer asset type from URL
+      const url = sourceUrl.toLowerCase()
+      if (url.includes("youtube.com") || url.includes("youtu.be") || url.includes("vimeo.com")) {
+        setAssetType("video")
+        setDerivedUrls((prev) => ({ ...prev, video: sourceUrl }))
+      } else if (url.includes("matterport") || url.includes("kuula") || url.includes("360") || url.includes("virtual-tour")) {
+        setAssetType("virtual_tour")
+        setDerivedUrls((prev) => ({ ...prev, virtual_tour: sourceUrl }))
+      } else {
+        // Default to flipbook for other links
+        setAssetType("flipbook")
+        setDerivedUrls((prev) => ({ ...prev, flipbook_en: sourceUrl }))
+      }
+
+      // Set thumbnail from OG image
+      if (preview.image) {
+        setDerivedThumbnailUrl(preview.image)
+      }
+
+      toast.success("Link preview loaded!")
+    } catch (error) {
+      console.error("Error fetching link preview:", error)
+      toast.error("Failed to load link preview")
+    } finally {
+      setIsLoadingPreview(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -150,8 +285,8 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
         category,
         language,
         description: description || null,
-        urls: {}, // Legacy
-        thumbnail_url: null, // Legacy
+        urls: derivedUrls, // From link preview or upload
+        thumbnail_url: derivedThumbnailUrl, // From link preview OG image
         tags,
         sort_order: sortOrder,
         is_active: isActive,
@@ -186,9 +321,10 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
         // Delete existing
         await supabase.from("asset_media").delete().eq("asset_id", savedAssetId)
         
-        // Insert new
-        if (mediaLinks.length > 0) {
-          const linksToInsert = mediaLinks.map(link => ({
+        // Insert new (filter out any with temporary asset_id)
+        const validLinks = mediaLinks.filter(link => link.media_id)
+        if (validLinks.length > 0) {
+          const linksToInsert = validLinks.map(link => ({
             asset_id: savedAssetId,
             media_id: link.media_id,
             role: link.role,
@@ -253,6 +389,95 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
           </Button>
         </div>
       </div>
+
+      {/* Source Card - Upload or Link */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Source</CardTitle>
+          <p className="text-sm text-muted-foreground">Upload a file or paste a link to get started</p>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="upload" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="upload">
+                <UploadIcon className="h-4 w-4 mr-2" />
+                Upload File
+              </TabsTrigger>
+              <TabsTrigger value="link">
+                <LinkIcon className="h-4 w-4 mr-2" />
+                Paste Link
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="upload" className="space-y-4">
+              <MediaUploadZone
+                propertyId={propertyId}
+                maxFiles={1}
+                allowedTypes={["image", "pdf", "video"]}
+                onUploadComplete={handlePrimaryUploadComplete}
+                showProcessingQueue
+              />
+            </TabsContent>
+
+            <TabsContent value="link" className="space-y-4">
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    type="url"
+                    placeholder="https://example.com/brochure"
+                    value={sourceUrl}
+                    onChange={(e) => setSourceUrl(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleLinkPreview}
+                    disabled={isLoadingPreview || !sourceUrl.trim()}
+                  >
+                    {isLoadingPreview ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>Fetch Preview</>
+                    )}
+                  </Button>
+                </div>
+
+                {linkPreview && (
+                  <Card className="bg-muted/50">
+                    <CardContent className="pt-4">
+                      <div className="flex gap-4">
+                        {linkPreview.image && (
+                          <img
+                            src={linkPreview.image}
+                            alt="Preview"
+                            className="w-24 h-24 object-cover rounded"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{linkPreview.title}</h4>
+                          {linkPreview.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                              {linkPreview.description}
+                            </p>
+                          )}
+                          <a
+                            href={sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-2"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            {sourceUrl}
+                          </a>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Basic Info */}
@@ -368,18 +593,12 @@ export function AssetForm({ asset, propertyId, mode }: AssetFormProps) {
             <CardTitle className="text-lg">Media & Files</CardTitle>
           </CardHeader>
           <CardContent>
-            {mode === "create" ? (
-              <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
-                <p>Save the asset first to add files.</p>
-              </div>
-            ) : (
-              <AssetMediaManager
-                assetId={asset!.id}
-                propertyId={propertyId}
-                initialMedia={mediaLinks}
-                onChange={setMediaLinks}
-              />
-            )}
+            <AssetMediaManager
+              assetId={asset?.id || "new-asset"}
+              propertyId={propertyId}
+              initialMedia={mediaLinks}
+              onChange={setMediaLinks}
+            />
           </CardContent>
         </Card>
 

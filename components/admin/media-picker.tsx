@@ -165,6 +165,7 @@ export function MediaPicker({
 
             <div className="flex items-center gap-2">
               <Button
+                type="button"
                 variant={viewMode === "grid" ? "default" : "ghost"}
                 size="icon"
                 onClick={() => setViewMode("grid")}
@@ -172,6 +173,7 @@ export function MediaPicker({
                 <Grid3x3 className="h-4 w-4" />
               </Button>
               <Button
+                type="button"
                 variant={viewMode === "list" ? "default" : "ghost"}
                 size="icon"
                 onClick={() => setViewMode("list")}
@@ -187,7 +189,7 @@ export function MediaPicker({
               <span className="text-sm font-medium">
                 {selectedIds.size} selected
               </span>
-              <Button variant="ghost" size="sm" onClick={handleClear}>
+              <Button type="button" variant="ghost" size="sm" onClick={handleClear}>
                 Clear
               </Button>
             </div>
@@ -205,6 +207,7 @@ export function MediaPicker({
               <p className="text-gray-500 mb-2">No media found</p>
               {searchQuery && (
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setSearchQuery("")}
@@ -240,10 +243,11 @@ export function MediaPicker({
 
         {/* Footer */}
         <div className="px-6 py-4 border-t flex items-center justify-between">
-          <Button variant="outline" onClick={onClose}>
+          <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
+            type="button"
             onClick={handleConfirm}
             disabled={selectedIds.size === 0}
           >

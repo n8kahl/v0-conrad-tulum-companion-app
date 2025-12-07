@@ -47,6 +47,11 @@ export function AssetMediaManager({
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [mediaItems, setMediaItems] = useState<Record<string, MediaLibraryItem>>({})
 
+  // Sync with parent when initialMedia changes (e.g., from uploads)
+  useEffect(() => {
+    setAllMedia(initialMedia)
+  }, [initialMedia])
+
   // Fetch media details
   useEffect(() => {
     if (allMedia.length > 0) {
