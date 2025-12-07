@@ -58,9 +58,14 @@ interface SiteVisitDetailProps {
 function getVenueHeroImage(venue: Venue & { venue_media?: (VenueMedia & { media: MediaLibrary })[] }): string | null {
   const toUrl = (path?: string | null) => {
     if (!path) return null
-    return path.startsWith("http://") || path.startsWith("https://")
-      ? path
-      : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/media-library/${path}`
+    if (path.startsWith("http://") || path.startsWith("https://")) return path
+    
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    if (!supabaseUrl) return null
+    
+    // Clean path - remove leading slash if present
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path
+    return `${supabaseUrl}/storage/v1/object/public/media-library/${cleanPath}`
   }
 
   if (!venue.venue_media || venue.venue_media.length === 0) return null
@@ -75,8 +80,11 @@ function getVenueHeroImage(venue: Venue & { venue_media?: (VenueMedia & { media:
   }
   
   // Fallback to first gallery image
-  const galleryMedia = venue.venue_media.find((vm) => vm.context === "gallery")
-  if (galleryMedia?.media?.storage_path) return toUrl(galleryMedia.media.storage_path)
+  const galleryMedia = venue.venue_media.find((vm) => vm.context === "gallery" && vm.is_primary)
+    ?? venue.venue_media.find((vm) => vm.context === "gallery")
+  if (galleryMedia?.media) {
+    return toUrl(galleryMedia.media.thumbnail_path) ?? toUrl(galleryMedia.media.storage_path)
+  }
   
   return null
 }
@@ -95,6 +103,9 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
   const [stops, setStops] = useState(initialStops)
   const [copied, setCopied] = useState(false)
   const [selectedVenue, setSelectedVenue] = useState<string>("")
+  const [venueSearch, setVenueSearch] = useState("")
+  const [savingStops, setSavingStops] = useState<Set<string>>(new Set())
+  const [showVenueGrid, setShowVenueGrid] = useState(false)
 
   const shareUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/visit/${visit.share_token}`
 
@@ -127,13 +138,15 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
         venue_id: selectedVenue,
         order_index: stops.length,
       })
-      .select("*, venue:venues(*)")
+      .select("*, venue:venues(*, venue_media(*, media:media_library(*)))")
       .single()
 
     if (!error && data) {
       setStops([...stops, data])
       setSelectedVenue("")
-      toast.success("Stop added to tour")
+      toast.success(`${data.venue?.name} added to tour`)
+    } else {
+      toast.error("Failed to add venue")
     }
   }
 
@@ -185,11 +198,23 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
   }
 
   const updateStopNotes = async (stopId: string, notes: string) => {
+    // Add to saving set
+    setSavingStops(prev => new Set(prev).add(stopId))
+    
     const supabase = createClient()
     const { error } = await supabase
       .from("visit_stops")
       .update({ sales_notes: notes || null })
       .eq("id", stopId)
+
+    // Remove from saving set after save completes
+    setTimeout(() => {
+      setSavingStops(prev => {
+        const next = new Set(prev)
+        next.delete(stopId)
+        return next
+      })
+    }, 500)
 
     if (!error) {
       setStops(stops.map((s) => (s.id === stopId ? { ...s, sales_notes: notes || null } : s)))
@@ -410,235 +435,342 @@ export function SiteVisitDetail({ visit: initialVisit, venues, stops: initialSto
 
           {/* Tour Plan */}
           <Card>
-            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary" />
-                Tour plan
-              </CardTitle>
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-lg font-medium flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  Tour Plan
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {stops.length} {stops.length === 1 ? 'venue' : 'venues'} • Drag to reorder
+                </p>
+              </div>
+              <Button 
+                onClick={() => setShowVenueGrid(!showVenueGrid)} 
+                className="bg-primary hover:bg-primary/90"
+                size="sm"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Venues
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                <Select value={selectedVenue} onValueChange={setSelectedVenue}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Select a venue to add..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {venues.map((venue) => (
-                      <SelectItem key={venue.id} value={venue.id}>
-                        {venue.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="flex gap-2">
-                  <Button onClick={addStop} disabled={!selectedVenue} className="bg-primary hover:bg-primary/90">
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add stop
-                  </Button>
+              {/* Visual Venue Selector Grid */}
+              {showVenueGrid && (
+                <div className="space-y-3 p-4 bg-muted/30 rounded-lg border-2 border-dashed border-primary/20">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Search venues..."
+                      value={venueSearch}
+                      onChange={(e) => setVenueSearch(e.target.value)}
+                      className="max-w-xs"
+                    />
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => setShowVenueGrid(false)}
+                    >
+                      Done
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[400px] overflow-y-auto">
+                    {venues
+                      .filter((v) => 
+                        v.name.toLowerCase().includes(venueSearch.toLowerCase()) ||
+                        v.venue_type.toLowerCase().includes(venueSearch.toLowerCase())
+                      )
+                      .map((venue) => {
+                        const alreadyAdded = stops.some((s) => s.venue_id === venue.id)
+                        const heroImage = getVenueHeroImage(venue)
+                        const capacity = getVenueCapacity(venue, 'banquet') || getVenueCapacity(venue, 'reception') || getVenueCapacity(venue, 'theater')
+                        
+                        return (
+                          <button
+                            key={venue.id}
+                            onClick={() => {
+                              if (!alreadyAdded) {
+                                setSelectedVenue(venue.id)
+                                addStop()
+                              }
+                            }}
+                            disabled={alreadyAdded}
+                            className={`relative group text-left rounded-lg border-2 overflow-hidden transition-all ${
+                              alreadyAdded 
+                                ? 'opacity-50 cursor-not-allowed border-muted bg-muted/50' 
+                                : 'hover:border-primary hover:shadow-md cursor-pointer border-border bg-card'
+                            }`}
+                          >
+                            <div className="aspect-[4/3] relative bg-muted">
+                              {heroImage ? (
+                                <Image
+                                  src={heroImage}
+                                  alt={venue.name}
+                                  fill
+                                  className="object-cover"
+                                  unoptimized
+                                />
+                              ) : (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <MapPin className="h-8 w-8 text-muted-foreground/30" />
+                                </div>
+                              )}
+                              {alreadyAdded && (
+                                <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                                  <Check className="h-8 w-8 text-primary" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-2">
+                              <p className="font-medium text-sm truncate">{venue.name}</p>
+                              <div className="flex items-center justify-between mt-1">
+                                <p className="text-xs text-muted-foreground capitalize truncate">
+                                  {venue.venue_type.replace('_', ' ')}
+                                </p>
+                                {capacity && (
+                                  <Badge variant="secondary" className="text-xs h-5">
+                                    <Users className="h-3 w-3 mr-1" />
+                                    {capacity}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                  </div>
                 </div>
-              </div>
+              )}
 
+              {/* Tour Stops - Redesigned */}
               {stops.length > 0 ? (
                 <div className="space-y-3">
                   {stops.map((stop, index) => {
-                    const hasNotes = !!stop.sales_notes
-                    const hasClientFeedback = !!stop.client_reaction
-                    const hasMedia = stop.photos && stop.photos.length > 0
+                    const heroImage = stop.venue ? getVenueHeroImage(stop.venue) : null
+                    const isSaving = savingStops.has(stop.id)
 
                     return (
                       <div
                         key={stop.id}
-                        className="rounded-lg border bg-card p-4 shadow-sm space-y-3"
+                        className="group rounded-lg border-2 bg-card hover:border-primary/50 transition-all shadow-sm hover:shadow-md"
                       >
-                        <div className="flex gap-3 items-start">
-                          <div className="flex flex-col items-center gap-1 pt-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => moveStop(index, "up")}
-                              disabled={index === 0}
-                            >
-                              <ChevronUp className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => moveStop(index, "down")}
-                              disabled={index === stops.length - 1}
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </Button>
+                        {/* Header: Image + Venue Info + Actions */}
+                        <div className="flex gap-4 p-4">
+                          {/* Reorder Handle */}
+                          <div className="flex flex-col items-center gap-0.5 pt-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+                              {index + 1}
+                            </div>
+                            <div className="flex flex-col mt-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => moveStop(index, "up")}
+                                disabled={index === 0}
+                              >
+                                <ChevronUp className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => moveStop(index, "down")}
+                                disabled={index === stops.length - 1}
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
 
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium shrink-0 mt-1">
-                            {index + 1}
-                          </div>
-
-                          <div className="relative w-16 h-16 rounded-md overflow-hidden bg-muted shrink-0">
-                            {stop.venue && getVenueHeroImage(stop.venue) ? (
+                          {/* Venue Image - Larger for better visibility */}
+                          <div className="relative w-32 h-24 rounded-lg overflow-hidden bg-muted shrink-0 border">
+                            {heroImage ? (
                               <Image
-                                src={getVenueHeroImage(stop.venue)!}
-                                alt={stop.venue.name}
+                                src={heroImage}
+                                alt={stop.venue?.name || 'Venue'}
                                 fill
                                 className="object-cover"
+                                unoptimized
                               />
                             ) : (
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <MapPin className="h-6 w-6 text-muted-foreground/30" />
+                              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground/50">
+                                <MapPin className="h-6 w-6" />
+                                <p className="text-xs mt-1">No image</p>
                               </div>
                             )}
                           </div>
 
-                          <div className="flex-1 min-w-0 space-y-1">
-                            <div className="flex items-start gap-2 justify-between">
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">{stop.venue?.name}</p>
-                                <p className="text-xs text-muted-foreground capitalize">
+                          {/* Venue Details */}
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <h3 className="font-semibold text-lg truncate">{stop.venue?.name}</h3>
+                                <p className="text-sm text-muted-foreground capitalize">
                                   {stop.venue?.venue_type.replace("_", " ")}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 shrink-0">
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className={`h-8 w-8 ${stop.client_favorited ? "text-yellow-500" : "text-muted-foreground"}`}
                                   onClick={() => toggleFavorite(stop.id, stop.client_favorited || false)}
+                                  title="Mark as favorite"
                                 >
                                   <Star className={`h-4 w-4 ${stop.client_favorited ? "fill-current" : ""}`} />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                   onClick={() => removeStop(stop.id)}
+                                  title="Remove from tour"
                                 >
                                   <X className="h-4 w-4" />
                                 </Button>
                               </div>
                             </div>
 
+                            {/* Capacity Badges - More Prominent */}
                             {stop.venue && (stop.venue.capacities as Record<string, number> | null) && (
-                              <div className="flex flex-wrap gap-1">
-                                {Object.entries(stop.venue.capacities as Record<string, number>).slice(0, 3).map(([setup, capacity]) => (
-                                  <Badge key={setup} variant="outline" className="text-[11px] h-5">
-                                    {setup}: {capacity}
-                                  </Badge>
-                                ))}
+                              <div className="flex flex-wrap gap-2">
+                                {Object.entries(stop.venue.capacities as Record<string, number>)
+                                  .slice(0, 4)
+                                  .map(([setup, capacity]) => (
+                                    <Badge key={setup} variant="secondary" className="text-xs px-2 py-1 font-medium">
+                                      <Users className="h-3 w-3 mr-1" />
+                                      {setup.charAt(0).toUpperCase() + setup.slice(1)}: {capacity}
+                                    </Badge>
+                                  ))}
                               </div>
                             )}
 
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              {hasNotes && <Badge variant="secondary" className="h-5">Sales notes</Badge>}
-                              {hasClientFeedback && <Badge variant="secondary" className="h-5">Client feedback</Badge>}
-                              {hasMedia && <Badge variant="secondary" className="h-5">Media</Badge>}
+                            {/* Time Selection */}
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                              <Input
+                                type="time"
+                                className="w-36 h-9"
+                                value={stop.scheduled_time || ""}
+                                onChange={(e) => updateStopTime(stop.id, e.target.value)}
+                                placeholder="Set time"
+                              />
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-3 pl-12">
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <Input
-                              type="time"
-                              className="w-32 h-9"
-                              value={stop.scheduled_time || ""}
-                              onChange={(e) => updateStopTime(stop.id, e.target.value)}
+                        {/* Planning Notes - Always Visible */}
+                        <div className="px-4 pb-4 space-y-3 border-t pt-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                                <MessageSquare className="h-4 w-4 text-primary" />
+                                Pre-Tour Notes
+                                <span className="text-xs text-muted-foreground font-normal">
+                                  (What to highlight during the tour)
+                                </span>
+                              </label>
+                              {isSaving && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <div className="h-2 w-2 bg-primary rounded-full animate-pulse" />
+                                  Saving...
+                                </span>
+                              )}
+                            </div>
+                            <Textarea
+                              placeholder={`e.g., "Highlight the natural lighting and ocean views. Mention the built-in AV system and flexible seating arrangements for up to ${getVenueCapacity(stop.venue!, 'reception') || '150'} guests."`}
+                              className="min-h-[100px] text-sm resize-none focus:ring-2 focus:ring-primary/20"
+                              value={stop.sales_notes || ""}
+                              onChange={(e) => {
+                                const newStops = stops.map(s => 
+                                  s.id === stop.id ? { ...s, sales_notes: e.target.value } : s
+                                )
+                                setStops(newStops)
+                              }}
+                              onBlur={(e) => updateStopNotes(stop.id, e.target.value)}
                             />
                           </div>
 
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setExpandedStop(expandedStop === stop.id ? null : stop.id)}
-                            className="gap-1"
-                          >
-                            {expandedStop === stop.id ? (
-                              <Minimize className="h-4 w-4" />
-                            ) : (
-                              <Expand className="h-4 w-4" />
-                            )}
-                            {expandedStop === stop.id ? "Hide details" : "More"}
-                          </Button>
-                        </div>
-
-                        {expandedStop === stop.id && (
-                          <div className="pt-3 border-t space-y-4 pl-12">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2">
-                                <label className="text-xs font-medium text-muted-foreground">Sales notes</label>
-                                <Textarea
-                                  placeholder="Notes about this space for the proposal..."
-                                  className="min-h-[80px] text-sm"
-                                  value={stop.sales_notes || ""}
-                                  onChange={(e) => updateStopNotes(stop.id, e.target.value)}
-                                  onBlur={(e) => updateStopNotes(stop.id, e.target.value)}
-                                />
-                              </div>
-
-                              <div className="space-y-2">
-                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                                  <MessageSquare className="h-3 w-3" />
-                                  Client reaction / feedback
-                                </label>
-                                <Textarea
-                                  placeholder="Client's comments, reactions, questions..."
-                                  className="min-h-[80px] text-sm"
-                                  value={stop.client_reaction || ""}
-                                  onChange={(e) => updateClientReaction(stop.id, e.target.value)}
-                                  onBlur={(e) => updateClientReaction(stop.id, e.target.value)}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                                <Camera className="h-3 w-3" />
-                                Captured media
-                              </label>
-                              {stop.photos && stop.photos.length > 0 ? (
-                                <div className="flex flex-wrap gap-2">
-                                  {stop.photos.map((photo, photoIndex) => (
-                                    <div
-                                      key={photoIndex}
-                                      className="relative group rounded overflow-hidden border"
-                                    >
-                                      <img
-                                        src={photo}
-                                        alt={`Stop photo ${photoIndex + 1}`}
-                                        className="w-20 h-20 object-cover"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => removePhoto(stop.id, photoIndex)}
-                                        className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </button>
+                          {/* Post-Tour Section - Collapsed by default */}
+                          {(stop.client_reaction || (stop.photos && stop.photos.length > 0)) && (
+                            <details className="group/details">
+                              <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground flex items-center gap-2 py-2">
+                                <Camera className="h-4 w-4" />
+                                Post-Tour Captures
+                                <Badge variant="outline" className="ml-auto">
+                                  {(stop.photos?.length || 0) + (stop.client_reaction ? 1 : 0)} items
+                                </Badge>
+                              </summary>
+                              <div className="space-y-3 pt-2">
+                                {stop.client_reaction && (
+                                  <div className="space-y-2">
+                                    <label className="text-xs font-medium text-muted-foreground">Client Feedback</label>
+                                    <div className="p-3 bg-muted/50 rounded-md text-sm">
+                                      {stop.client_reaction}
                                     </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-2 py-3 px-4 rounded-md bg-muted/50 border border-dashed">
-                                  <Camera className="h-4 w-4 text-muted-foreground" />
-                                  <p className="text-xs text-muted-foreground">
-                                    Media captured during tour will appear here
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                                  </div>
+                                )}
+                                {stop.photos && stop.photos.length > 0 && (
+                                  <div className="space-y-2">
+                                    <label className="text-xs font-medium text-muted-foreground">Photos</label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {stop.photos.map((photo, photoIndex) => (
+                                        <div
+                                          key={photoIndex}
+                                          className="relative group/photo rounded overflow-hidden border"
+                                        >
+                                          <img
+                                            src={photo}
+                                            alt={`Stop photo ${photoIndex + 1}`}
+                                            className="w-24 h-24 object-cover"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => removePhoto(stop.id, photoIndex)}
+                                            className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover/photo:opacity-100 transition-opacity"
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </details>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground border rounded-lg">
-                  <MapPin className="mx-auto h-8 w-8 mb-2 opacity-50" />
-                  <p className="text-sm">No venues added to the tour yet</p>
+                <div className="text-center py-12 space-y-4">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
+                    <MapPin className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-medium">Build Your Tour</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                      Click "Add Venues" above to start building your site visit tour. Add venues, set times, and write notes about what to highlight.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 pt-2">
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      Set times
+                    </div>
+                    <div className="text-muted-foreground">•</div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <MessageSquare className="h-3 w-3" />
+                      Add notes
+                    </div>
+                    <div className="text-muted-foreground">•</div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Star className="h-3 w-3" />
+                      Mark favorites
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>
